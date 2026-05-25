@@ -19,7 +19,8 @@ import {
   Layers,
   HelpCircle,
   ShieldCheck,
-  Zap
+  Zap,
+  Bookmark
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 
@@ -80,7 +81,8 @@ export default function DoubtSolverChat() {
   const [input, setInput] = useState('');
   const [selectedTopic, setSelectedTopic] = useState('General');
   const [loading, setLoading] = useState(false);
-  const [sessionUser, setSessionUser] = useState<{ username: string; email: string } | null>(null);
+  const [sessionUser, setSessionUser] = useState<{ username: string; email: string; role?: string } | null>(null);
+  const [savingNoteIdx, setSavingNoteIdx] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
@@ -127,6 +129,58 @@ export default function DoubtSolverChat() {
       localStorage.setItem('doubt-solver-thread', JSON.stringify(messages));
     }
   }, [messages]);
+
+  // Save Bot Answer as a Study Note (Admin only)
+  const handleSaveAsNote = async (text: string, index: number) => {
+    if (!sessionUser || sessionUser.role !== 'Admin') {
+      toast.error('Administrative access required to save study notes.');
+      return;
+    }
+
+    setSavingNoteIdx(index);
+
+    try {
+      // Find the user query that prompted this answer
+      const prevMsg = index > 0 ? messages[index - 1] : null;
+      const userQuery = prevMsg && prevMsg.role === 'user' ? prevMsg.text : '';
+      
+      // Generate clean title from the user query
+      const cleanQuery = userQuery.trim().replace(/[?#*`[\]()]/g, '');
+      const titleExcerpt = cleanQuery.length > 50 ? cleanQuery.slice(0, 47) + '...' : cleanQuery;
+      const noteTitle = titleExcerpt ? `AI Doubt: ${titleExcerpt}` : `AI Doubt Note (${selectedTopic})`;
+
+      // Map topic to standard category slug
+      let categorySlug = 'general';
+      if (selectedTopic === 'dotnet') categorySlug = 'dotnet-core';
+      else if (selectedTopic === 'sql') categorySlug = 'sql';
+      else if (selectedTopic === 'react') categorySlug = 'react';
+      else if (selectedTopic === 'system-design') categorySlug = 'system-design';
+
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: noteTitle,
+          category: categorySlug,
+          content: text.trim(),
+          tags: ['AI Doubt', selectedTopic],
+          pinned: false,
+          favorite: false
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Successfully saved as study note under '${categorySlug}'! 📝`);
+      } else {
+        toast.error(data.error || 'Failed to save note.');
+      }
+    } catch (e: any) {
+      toast.error('Error saving study note: ' + e.message);
+    } finally {
+      setSavingNoteIdx(null);
+    }
+  };
 
   // Trigger Send Message
   const handleSendMessage = async (customPrompt?: string) => {
@@ -301,13 +355,36 @@ export default function DoubtSolverChat() {
                   </div>
 
                   {/* Bubble Box */}
-                  <div className="space-y-1">
-                    <div className={`flex items-center gap-1.5 text-[10px] text-text-muted select-none ${!isBot && 'flex-row-reverse'}`}>
-                      <span className="font-extrabold text-text-primary/95">{isBot ? 'Doubt Solver AI' : (sessionUser?.username || 'You')}</span>
-                      <span>•</span>
-                      <span>
-                        {msg.timestamp.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                  <div className="space-y-1 w-full">
+                    <div className={`flex items-center justify-between gap-3 text-[10px] text-text-muted select-none ${!isBot && 'flex-row-reverse'}`}>
+                      <div className={`flex items-center gap-1.5 ${!isBot && 'flex-row-reverse'}`}>
+                        <span className="font-extrabold text-text-primary/95">{isBot ? 'Doubt Solver AI' : (sessionUser?.username || 'You')}</span>
+                        <span>•</span>
+                        <span>
+                          {msg.timestamp.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      
+                      {isBot && sessionUser?.role === 'Admin' && (
+                        <button
+                          onClick={() => handleSaveAsNote(msg.text, idx)}
+                          disabled={savingNoteIdx !== null}
+                          className="flex items-center gap-1 px-2 py-0.5 bg-accent-app/10 hover:bg-accent-app/20 border border-accent-app/15 hover:border-accent-app/30 text-accent-app rounded-md transition-all cursor-pointer font-bold select-none text-[9px] hover:scale-102 active:scale-98 shadow-sm"
+                          title="Save this answer as a key study note in your library"
+                        >
+                          {savingNoteIdx === idx ? (
+                            <>
+                              <Loader className="w-2.5 h-2.5 animate-spin" />
+                              <span>Saving...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Bookmark className="w-2.5 h-2.5 text-accent-app" />
+                              <span>Save as Study Note</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
 
                     <div className={`rounded-2xl p-3.5 text-xs leading-relaxed border ${

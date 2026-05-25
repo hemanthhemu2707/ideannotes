@@ -130,11 +130,18 @@ function LoginContent() {
     }
   };
 
-  // Trigger full verification & registration
+  // Trigger full registration (OTP Free)
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regName.trim() || !regEmail.trim() || !regPassword.trim() || !otpCode.trim()) {
-      setError('All fields and OTP code are required.');
+    if (!regName.trim() || !regEmail.trim() || !regPassword.trim()) {
+      setError('All fields (Name, Email, Password) are required.');
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(regEmail.trim())) {
+      setError('Please enter a valid email address.');
       return;
     }
 
@@ -149,8 +156,7 @@ function LoginContent() {
           action: 'verify-and-register',
           username: regName.trim(),
           email: regEmail.trim(),
-          password: regPassword.trim(),
-          code: otpCode.trim()
+          password: regPassword.trim()
         })
       });
 
@@ -163,16 +169,14 @@ function LoginContent() {
         setRegName('');
         setRegEmail('');
         setRegPassword('');
-        setOtpCode('');
-        setOtpSent(false);
         
         // Switch back to login page
         setTimeout(() => {
           setActiveTab('login');
           resetMessages();
-        }, 6000);
+        }, 5500);
       } else {
-        setError(data.error || 'Failed to verify verification code.');
+        setError(data.error || 'Failed to register account.');
       }
     } catch (err) {
       setError('Server communication failure.');
@@ -353,7 +357,7 @@ function LoginContent() {
                     placeholder="e.g. John Doe"
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
-                    disabled={loading || otpSent}
+                    disabled={loading}
                     className="w-full bg-black/20 border border-border-app/60 focus:border-accent-app rounded-xl pl-10 pr-4 py-2.5 text-xs text-text-primary placeholder-text-muted/30 focus:outline-none transition-colors"
                   />
                 </div>
@@ -361,7 +365,7 @@ function LoginContent() {
 
               <div>
                 <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1.5 pl-0.5">
-                  Email Address (Verification)
+                  Email Address
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-3 w-4 h-4 text-text-muted/40" />
@@ -370,7 +374,7 @@ function LoginContent() {
                     placeholder="name@gmail.com"
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
-                    disabled={loading || otpSent}
+                    disabled={loading}
                     className="w-full bg-black/20 border border-border-app/60 focus:border-accent-app rounded-xl pl-10 pr-4 py-2.5 text-xs text-text-primary placeholder-text-muted/30 focus:outline-none transition-colors"
                   />
                 </div>
@@ -387,7 +391,7 @@ function LoginContent() {
                     placeholder="••••••••"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
-                    disabled={loading || otpSent}
+                    disabled={loading}
                     className="w-full bg-black/20 border border-border-app/60 focus:border-accent-app rounded-xl pl-10 pr-10 py-2.5 text-xs text-text-primary placeholder-text-muted/30 focus:outline-none transition-colors"
                   />
                   <button
@@ -400,79 +404,23 @@ function LoginContent() {
                 </div>
               </div>
 
-              {/* 1. Request Code Action Button */}
-              {!otpSent && (
-                <button
-                  type="button"
-                  onClick={handleRequestOtp}
-                  disabled={otpLoading || !regName || !regEmail || !regPassword}
-                  className="w-full bg-accent-app/10 border border-accent-app/20 text-accent-app hover:bg-accent-app/20 disabled:opacity-50 font-extrabold py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all mt-6 shadow-sm"
-                >
-                  {otpLoading ? (
-                    <>
-                      <Loader className="w-4 h-4 animate-spin text-accent-app" />
-                      <span>Sending Verification OTP...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Mail className="w-4.5 h-4.5" />
-                      <span>Request Verification Code</span>
-                    </>
-                  )}
-                </button>
-              )}
-
-              {/* 2. OTP Code Verification Fields */}
-              {otpSent && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="space-y-4 pt-2"
-                >
-                  <div>
-                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1.5 pl-0.5">
-                      6-Digit Verification Code (OTP)
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      placeholder="e.g. 123456"
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                      disabled={loading}
-                      className="w-full bg-black/40 border border-indigo-500/30 text-center tracking-widest text-base font-bold rounded-xl py-2.5 text-text-primary placeholder-text-muted/20 focus:outline-none focus:border-accent-app transition-colors"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading || otpCode.length !== 6}
-                    className="w-full bg-accent-app hover:bg-accent-app/95 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-lg shadow-accent-app/10"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader className="w-4 h-4 animate-spin" />
-                        <span>Verifying OTP & Registering...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="w-4.5 h-4.5 text-emerald-100" />
-                        <span>Verify & Create Reader Account</span>
-                      </>
-                    )}
-                  </button>
-
-                  <div className="text-center">
-                    <button
-                      type="button"
-                      onClick={() => setOtpSent(false)}
-                      className="text-[10px] text-text-muted/65 hover:text-text-primary underline cursor-pointer"
-                    >
-                      Reset Fields & Change Email
-                    </button>
-                  </div>
-                </motion.div>
-              )}
+              <button
+                type="submit"
+                disabled={loading || !regName.trim() || !regEmail.trim() || !regPassword.trim()}
+                className="w-full bg-accent-app hover:bg-accent-app/95 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all mt-6 shadow-lg shadow-accent-app/10"
+              >
+                {loading ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    <span>Registering Account...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Register Reader Account</span>
+                    <ArrowRight className="w-4 h-4 ml-0.5" />
+                  </>
+                )}
+              </button>
             </motion.form>
           )}
         </AnimatePresence>

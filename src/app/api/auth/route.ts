@@ -161,12 +161,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: 'Verification code dispatched successfully!' });
     }
 
-    // 4. Verify OTP and Create Pending User
+    // 4. Create Pending User (OTP Free)
     if (action === 'verify-and-register') {
-      const { username, email, password, code } = body;
+      const { username, email, password } = body;
 
-      if (!username || !email || !password || !code) {
-        return NextResponse.json({ success: false, error: 'All fields (Display Name, Email, Password, OTP Code) are required.' }, { status: 400 });
+      if (!username || !email || !password) {
+        return NextResponse.json({ success: false, error: 'All fields (Display Name, Email, Password) are required.' }, { status: 400 });
       }
 
       const pool = await getDbPool();
@@ -180,29 +180,14 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, error: 'An account is already registered with this email address.' }, { status: 400 });
       }
 
-      // Verify OTP Code
-      const otpRes = await pool.request()
-        .input('email', sql.VarChar, email.trim())
-        .query('SELECT * FROM OtpCodes WHERE Email = @email');
+      // Check if username already exists
+      const usernameCheck = await pool.request()
+        .input('username', sql.VarChar, username.trim())
+        .query('SELECT Username FROM Users WHERE Username = @username');
 
-      if (otpRes.recordset.length === 0) {
-        return NextResponse.json({ success: false, error: 'No verification code found. Please request a new OTP.' }, { status: 400 });
+      if (usernameCheck.recordset.length > 0) {
+        return NextResponse.json({ success: false, error: 'This username is already taken. Please choose another display name.' }, { status: 400 });
       }
-
-      const otp = otpRes.recordset[0];
-
-      if (otp.Code !== code.trim()) {
-        return NextResponse.json({ success: false, error: 'Incorrect verification code. Please try again.' }, { status: 400 });
-      }
-
-      if (new Date(otp.ExpiresAt).getTime() < Date.now()) {
-        return NextResponse.json({ success: false, error: 'Verification code has expired. Please request a new OTP.' }, { status: 400 });
-      }
-
-      // Delete the verified OTP
-      await pool.request()
-        .input('email', sql.VarChar, email.trim())
-        .query('DELETE FROM OtpCodes WHERE Email = @email');
 
       // Create new user (pending approval: IsApproved = 0)
       const passHash = hashPassword(password);
