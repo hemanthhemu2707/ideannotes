@@ -107,8 +107,22 @@ async function initDb(pool: sql.ConnectionPool) {
               Id INT IDENTITY(1,1) PRIMARY KEY,
               Username VARCHAR(100) UNIQUE NOT NULL,
               PasswordHash VARCHAR(250) NOT NULL,
-              Role VARCHAR(50) NOT NULL DEFAULT 'User'
+              Role VARCHAR(50) NOT NULL DEFAULT 'User',
+              Email VARCHAR(150) NULL,
+              IsApproved BIT NOT NULL DEFAULT 0
           );
+      END
+
+      -- Add Email to Users if it doesn't exist
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'Email')
+      BEGIN
+          ALTER TABLE Users ADD Email VARCHAR(150) NULL;
+      END
+
+      -- Add IsApproved to Users if it doesn't exist
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'IsApproved')
+      BEGIN
+          ALTER TABLE Users ADD IsApproved BIT NOT NULL DEFAULT 0;
       END
 
       -- 4. Create InterviewSchedules Table
@@ -146,10 +160,30 @@ async function initDb(pool: sql.ConnectionPool) {
               NoteSlug VARCHAR(150) NOT NULL FOREIGN KEY REFERENCES Notes(Slug) ON DELETE CASCADE,
               Author NVARCHAR(100) NOT NULL,
               Content NVARCHAR(MAX) NOT NULL,
-              CreatedDate DATETIME2 NOT NULL DEFAULT GETDATE()
+              CreatedDate DATETIME2 NOT NULL DEFAULT GETDATE(),
+              Email VARCHAR(150) NULL
           );
           CREATE INDEX IX_Comments_NoteSlug ON Comments(NoteSlug, CreatedDate DESC);
       END
+
+      -- Add Email to Comments if it doesn't exist
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Comments') AND name = 'Email')
+      BEGIN
+          ALTER TABLE Comments ADD Email VARCHAR(150) NULL;
+      END
+
+      -- 6b. Create OtpCodes Table
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'OtpCodes')
+      BEGIN
+          CREATE TABLE OtpCodes (
+              Email VARCHAR(150) PRIMARY KEY,
+              Code VARCHAR(6) NOT NULL,
+              ExpiresAt DATETIME2 NOT NULL
+          );
+      END
+
+      -- Ensure default admin is approved
+      UPDATE Users SET IsApproved = 1 WHERE Username = 'admin';
 
       -- 7. Add High-Performance Covering Indexes for SortOrder and queries
       IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Categories_SortOrder' AND object_id = OBJECT_ID('Categories'))
@@ -157,6 +191,7 @@ async function initDb(pool: sql.ConnectionPool) {
           CREATE INDEX IX_Categories_SortOrder ON Categories(SortOrder, Name);
       END
 
+      -- Add covering index for active notes query
       IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Notes_ActiveSort' AND object_id = OBJECT_ID('Notes'))
       BEGIN
           CREATE INDEX IX_Notes_ActiveSort ON Notes(IsDeleted, SortOrder, Pinned, UpdatedDate DESC) INCLUDE (Slug, Title, CategorySlug, ReadingTime);

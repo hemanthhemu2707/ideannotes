@@ -23,7 +23,8 @@ import {
   Edit2,
   CheckCircle,
   FolderPlus,
-  X
+  X,
+  User
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
@@ -37,13 +38,14 @@ function ManageNotesContent() {
   const toast = useToast();
 
   const [notes, setNotes] = useState<Note[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [trashNotes, setTrashNotes] = useState<Note[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   
   // UI States
-  const [currentTab, setCurrentTab] = useState<'active' | 'trash' | 'categories'>('active');
+  const [currentTab, setCurrentTab] = useState<'active' | 'trash' | 'categories' | 'users'>('active');
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -120,6 +122,12 @@ function ManageNotesContent() {
       }
       if (trashData.success) setTrashNotes(trashData.notes);
       if (catData.success) setCategories(catData.categories);
+
+      if (adminPrivileged) {
+        const usersRes = await fetch('/api/users');
+        const usersData = await usersRes.json();
+        if (usersData.success) setUsers(usersData.users);
+      }
     } catch (e) {
       toast.error('Failed to load notes inventory.');
     } finally {
@@ -422,6 +430,46 @@ function ManageNotesContent() {
     setDeleteCategoryModalOpen(true);
   };
 
+  const handleToggleApproval = async (user: any) => {
+    if (!isAdmin) return;
+    const nextApproved = !user.isApproved;
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: user.id, isApproved: nextApproved })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || 'User approval updated.');
+        fetchData();
+      } else {
+        toast.error(data.error || 'Failed to update approval.');
+      }
+    } catch {
+      toast.error('An error occurred.');
+    }
+  };
+
+  const handleDeleteUser = async (id: number) => {
+    if (!isAdmin) return;
+    if (!window.confirm('Are you sure you want to permanently delete this user account?')) return;
+    try {
+      const res = await fetch(`/api/users?id=${id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('User account permanently deleted.');
+        fetchData();
+      } else {
+        toast.error(data.error || 'Failed to delete user.');
+      }
+    } catch {
+      toast.error('Connection failure.');
+    }
+  };
+
   const handleConfirmDeleteCategory = async () => {
     if (!pendingDeleteCategorySlug || !isAdmin) return;
     try {
@@ -543,6 +591,23 @@ function ManageNotesContent() {
           <Folder className="w-4 h-4" />
           <span>Categories Manager ({categories.length})</span>
         </button>
+
+        {isAdmin && (
+          <button
+            onClick={() => {
+              setCurrentTab('users');
+              setSelectedSlugs([]);
+            }}
+            className={`pb-3 font-extrabold tracking-wider uppercase border-b-2 transition-all relative flex items-center gap-2 cursor-pointer ${
+              currentTab === 'users' 
+                ? 'text-accent-app border-accent-app font-bold' 
+                : 'text-text-muted border-transparent hover:text-text-primary'
+            }`}
+          >
+            <User className="w-4 h-4" />
+            <span>Readers Console ({users.length})</span>
+          </button>
+        )}
       </div>
 
       {/* Filter and Control Actions Toolbar */}
@@ -914,7 +979,7 @@ function ManageNotesContent() {
             </div>
           </div>
         )
-      ) : (
+      ) : currentTab === 'categories' ? (
         /* DYNAMIC CATEGORY MANAGER PANEL */
         <div className="space-y-6">
           {/* Add Category Panel (Admin Only) */}
@@ -1027,6 +1092,86 @@ function ManageNotesContent() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      ) : (
+        /* USER ACCOUNT MANAGEMENT PANEL */
+        <div className="space-y-6">
+          <div className="glass-panel rounded-2xl border border-border-app overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs select-none">
+                <thead>
+                  <tr className="bg-black/10 border-b border-border-app text-text-muted font-bold uppercase tracking-wider">
+                    <th className="p-4">Display Name</th>
+                    <th className="p-4">Email Address</th>
+                    <th className="p-4">Role</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4 w-48 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => {
+                    const isAdminUser = u.role === 'Admin';
+                    return (
+                      <tr
+                        key={u.id}
+                        className="hover:bg-white/3 border-b border-border-app/40 transition-colors"
+                      >
+                        <td className="p-4 font-bold text-text-primary flex items-center gap-2">
+                          <User className="w-3.5 h-3.5 text-text-muted/65 shrink-0" />
+                          <span>{u.username}</span>
+                        </td>
+                        <td className="p-4 text-text-muted font-semibold">
+                          <a href={`mailto:${u.email}`} className="hover:text-accent-app transition-colors">{u.email}</a>
+                        </td>
+                        <td className="p-4">
+                          <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                            isAdminUser 
+                              ? 'bg-amber-500/10 border border-amber-500/15 text-amber-455' 
+                              : 'bg-indigo-500/10 border border-indigo-500/15 text-indigo-400'
+                          }`}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                            u.isApproved 
+                              ? 'bg-emerald-500/10 border border-emerald-500/15 text-emerald-455' 
+                              : 'bg-amber-500/10 border border-amber-500/15 text-amber-455 animate-pulse'
+                          }`}>
+                            {u.isApproved ? 'Approved' : 'Pending Approval'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right space-x-3 font-semibold text-text-muted">
+                          {!isAdminUser ? (
+                            <>
+                              <button
+                                onClick={() => handleToggleApproval(u)}
+                                className={`cursor-pointer transition-colors ${
+                                  u.isApproved 
+                                    ? 'text-amber-550 hover:text-amber-400' 
+                                    : 'text-emerald-500 hover:text-emerald-400'
+                                }`}
+                              >
+                                {u.isApproved ? 'Revoke' : 'Approve Reader'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(u.id)}
+                                className="text-text-muted hover:text-red-400 cursor-pointer transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-text-muted/30 font-normal">Superadmin Lock</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

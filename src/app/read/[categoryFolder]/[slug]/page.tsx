@@ -542,6 +542,7 @@ interface Comment {
   id: number;
   noteSlug: string;
   author: string;
+  email: string;
   content: string;
   createdDate: string;
 }
@@ -549,7 +550,7 @@ interface Comment {
 function CommentsSection({ noteSlug, isAdmin }: { noteSlug: string; isAdmin: boolean }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [content, setContent] = useState('');
-  const [author, setAuthor] = useState('');
+  const [sessionUser, setSessionUser] = useState<{ username: string; email: string; role: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
@@ -568,8 +569,21 @@ function CommentsSection({ noteSlug, isAdmin }: { noteSlug: string; isAdmin: boo
     }
   };
 
+  const fetchSession = async () => {
+    try {
+      const res = await fetch('/api/auth');
+      const data = await res.json();
+      if (data.success && data.user) {
+        setSessionUser(data.user);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     fetchComments();
+    fetchSession();
   }, [noteSlug]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -583,7 +597,6 @@ function CommentsSection({ noteSlug, isAdmin }: { noteSlug: string; isAdmin: boo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           noteSlug,
-          author: isAdmin ? 'Admin' : author.trim() || 'Anonymous Developer',
           content: content.trim()
         })
       });
@@ -646,18 +659,13 @@ function CommentsSection({ noteSlug, isAdmin }: { noteSlug: string; isAdmin: boo
         />
 
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          {!isAdmin ? (
-            <input
-              type="text"
-              placeholder="Your Name (e.g. Guest Developer)"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              disabled={submitting}
-              className="bg-black/20 border border-border-app/45 rounded-lg px-3 py-1.5 text-xs text-text-primary placeholder-text-muted/30 focus:outline-none focus:border-accent-app/60 max-w-[200px]"
-            />
-          ) : (
-            <div className="text-[10px] text-emerald-450 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/15">
-              Posting as Admin
+          {sessionUser && (
+            <div className="text-[10px] text-accent-app/80 font-bold bg-accent-app/10 px-2.5 py-1.5 rounded-xl border border-accent-app/15 flex items-center gap-1.5">
+              <span>Posting as:</span>
+              <span className="text-text-primary font-black">{sessionUser.username}</span>
+              {sessionUser.email && (
+                <span className="text-text-muted/70 font-semibold font-mono">({sessionUser.email})</span>
+              )}
             </div>
           )}
 
@@ -712,6 +720,11 @@ function CommentsSection({ noteSlug, isAdmin }: { noteSlug: string; isAdmin: boo
                       <span className="text-xs font-bold text-text-primary leading-none">
                         {comment.author}
                       </span>
+                      {comment.email && comment.email !== 'No Email' && (
+                        <span className="text-[10px] text-text-muted/60 font-semibold font-mono truncate max-w-[160px]" title={comment.email}>
+                          ({comment.email})
+                        </span>
+                      )}
                       {isCommentAdmin && (
                         <span className="text-[8px] font-extrabold uppercase tracking-wider bg-amber-500/10 border border-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded">
                           Creator
@@ -727,7 +740,7 @@ function CommentsSection({ noteSlug, isAdmin }: { noteSlug: string; isAdmin: boo
                       </span>
                     </div>
 
-                    <p className="text-xs text-text-muted mt-2 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-xs text-text-muted mt-2 leading-relaxed whitespace-pre-wrap font-medium">
                       {comment.content}
                     </p>
                   </div>

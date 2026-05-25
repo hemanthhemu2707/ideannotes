@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const res = await pool.request()
       .input('noteSlug', sql.VarChar, noteSlug)
       .query(`
-        SELECT Id as id, NoteSlug as noteSlug, Author as author, Content as content, CreatedDate as createdDate
+        SELECT Id as id, NoteSlug as noteSlug, Author as author, Email as email, Content as content, CreatedDate as createdDate
         FROM Comments
         WHERE NoteSlug = @noteSlug
         ORDER BY CreatedDate DESC
@@ -33,22 +33,32 @@ export async function GET(request: Request) {
 // POST /api/comments - Post a new comment
 export async function POST(request: Request) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ success: false, error: 'Authentication required. Please sign in.' }, { status: 401 });
+    }
+
     const body = await request.json();
-    const { noteSlug, author, content } = body;
+    const { noteSlug, content } = body;
     
     if (!noteSlug || !content) {
       return NextResponse.json({ success: false, error: 'noteSlug and content are required' }, { status: 400 });
     }
     
-    const session = await getSession();
-    let finalAuthor = author || 'Guest';
-    
-    // If authenticated as Admin, lock the name to Admin
-    if (session && session.role === 'Admin') {
-      finalAuthor = session.username || 'Admin';
-    }
-    
     const pool = await getDbPool();
+    
+    // Retrieve registered user details from Database to ensure we store verified Email and Name
+    const userRes = await pool.request()
+      .input('username', sql.VarChar, session.username)
+      .query('SELECT Username, Email, Role FROM Users WHERE Username = @username');
+      
+    if (userRes.recordset.length === 0) {
+      return NextResponse.json({ success: false, error: 'User profile not found.' }, { status: 404 });
+    }
+
+    const user = userRes.recordset[0];
+    const finalAuthor = user.Username;
+    const finalEmail = user.Email || 'No Email';
     
     // Verify note exists
     const noteCheck = await pool.request()
@@ -61,12 +71,13 @@ export async function POST(request: Request) {
     
     const res = await pool.request()
       .input('noteSlug', sql.VarChar, noteSlug)
-      .input('author', sql.NVarChar, finalAuthor.substring(0, 100))
+      .input('author', sql.NVarChar, finalAuthor)
+      .input('email', sql.VarChar, finalEmail)
       .input('content', sql.NVarChar, content)
       .query(`
-        INSERT INTO Comments (NoteSlug, Author, Content, CreatedDate)
-        OUTPUT INSERTED.Id as id, INSERTED.NoteSlug as noteSlug, INSERTED.Author as author, INSERTED.Content as content, INSERTED.CreatedDate as createdDate
-        VALUES (@noteSlug, @author, @content, GETDATE())
+        INSERT INTO Comments (NoteSlug, Author, Email, Content, CreatedDate)
+        OUTPUT INSERTED.Id as id, INSERTED.NoteSlug as noteSlug, INSERTED.Author as author, INSERTED.Email as email, INSERTED.Content as content, INSERTED.CreatedDate as createdDate
+        VALUES (@noteSlug, @author, @email, @content, GETDATE())
       `);
       
     return NextResponse.json({ success: true, comment: res.recordset[0] });

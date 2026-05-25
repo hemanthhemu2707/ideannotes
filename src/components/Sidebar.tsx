@@ -27,7 +27,8 @@ import {
   Palette,
   Calendar,
   FileText,
-  X
+  X,
+  MessageSquareCode
 } from 'lucide-react';
 import CommandPalette from './CommandPalette';
 import LoginModal from './LoginModal';
@@ -704,6 +705,19 @@ export default function Sidebar() {
               {!isCollapsed && <span className="truncate">Schedules & Prep</span>}
             </Link>
 
+            {/* AI Doubt Solver Link */}
+            <Link
+              href="/chat"
+              className={`flex items-center gap-3 w-full p-2.5 rounded-xl transition-all text-sm font-medium border ${
+                pathname === '/chat' 
+                  ? 'bg-accent-app/10 border-accent-app/20 text-accent-app font-semibold' 
+                  : 'text-text-muted hover:text-text-primary hover:bg-white/5 border-transparent hover:border-border-app/40'
+              }`}
+            >
+              <MessageSquareCode className={`w-5 h-5 shrink-0 ${pathname === '/chat' ? 'text-accent-app' : 'text-text-muted'}`} />
+              {!isCollapsed && <span className="truncate">Doubt Solver AI</span>}
+            </Link>
+
             {/* Add Note Link */}
             <Link
               href={activeCategoryParam ? `/add?category=${activeCategoryParam}` : "/add"}
@@ -858,17 +872,17 @@ export default function Sidebar() {
             {!isCollapsed && (
               <div className="flex flex-col min-w-0">
                 <span className="text-xs font-bold text-text-primary truncate">
-                  {isAdmin ? 'Admin Portal' : 'Guest Reader'}
+                  {currentUser ? currentUser.username : 'Guest Reader'}
                 </span>
                 <span className="text-[10px] text-text-muted truncate">
-                  {isAdmin ? 'CRUD Privileged' : 'Read-Only Mode'}
+                  {currentUser?.role === 'Admin' ? 'Admin Portal' : 'Approved Reader'}
                 </span>
               </div>
             )}
           </div>
           
           {!isCollapsed && (
-            isAdmin ? (
+            currentUser ? (
               <button 
                 onClick={handleLogout}
                 title="Lock session"

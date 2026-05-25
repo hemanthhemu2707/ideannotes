@@ -17,7 +17,8 @@ import {
   ChevronDown,
   Folder,
   Palette,
-  FileText
+  FileText,
+  MessageSquareCode
 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import LoginModal from './LoginModal';
@@ -653,6 +654,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             >
               <Calendar className="w-5.5 h-5.5" />
               <span>Schedules</span>
+            </Link>
+
+            <Link 
+              href="/chat"
+              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-all ${
+                pathname === '/chat' ? 'text-accent-app' : 'text-text-muted'
+              }`}
+            >
+              <MessageSquareCode className="w-5.5 h-5.5" />
+              <span>AI Doubt</span>
             </Link>
 
             <Link 
