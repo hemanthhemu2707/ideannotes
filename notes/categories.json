@@ -1,0 +1,62 @@
+[
+  {
+    "slug": "dotnet",
+    "name": ".NET",
+    "icon": "FileCode"
+  },
+  {
+    "slug": "dotnet-core",
+    "name": ".NET Core",
+    "icon": "FileCode"
+  },
+  {
+    "slug": "entity-framework",
+    "name": "Entity Framework",
+    "icon": "FileCode"
+  },
+  {
+    "slug": "react",
+    "name": "React",
+    "icon": "Layers"
+  },
+  {
+    "slug": "angular",
+    "name": "Angular",
+    "icon": "Layers"
+  },
+  {
+    "slug": "javascript",
+    "name": "JavaScript",
+    "icon": "Layers"
+  },
+  {
+    "slug": "sql",
+    "name": "SQL",
+    "icon": "Database"
+  },
+  {
+    "slug": "design-patterns",
+    "name": "Design Patterns",
+    "icon": "Puzzle"
+  },
+  {
+    "slug": "apis",
+    "name": "APIs",
+    "icon": "Webhook"
+  },
+  {
+    "slug": "security",
+    "name": "Security",
+    "icon": "Shield"
+  },
+  {
+    "slug": "system-design",
+    "name": "System Design",
+    "icon": "Network"
+  },
+  {
+    "slug": "asdsf",
+    "name": "asdsf",
+    "icon": "FolderOpen"
+  }
+]
