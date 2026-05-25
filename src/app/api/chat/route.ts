@@ -230,11 +230,17 @@ Core Directives:
       const errText = await apiResponse.text();
       console.error('Gemini Chat API returned status error:', apiResponse.status, errText);
       
-      // If the API key is restricted or revoked by Google (403/401), trigger Heuristic offline mode!
-      if (apiResponse.status === 403 || apiResponse.status === 401) {
-        console.log('Gemini API key is invalid/revoked (403). Activating Offline Heuristic Mode fallback.');
+      // If the API key is restricted, revoked, or rate-limited (403/401/429), trigger Heuristic offline mode!
+      if (apiResponse.status === 403 || apiResponse.status === 401 || apiResponse.status === 429) {
+        console.log(`Gemini API key returned status ${apiResponse.status}. Activating Offline Heuristic Mode fallback.`);
         const topicKey = topic || 'General';
-        const text = OFFLINE_REPLIES[topicKey] || OFFLINE_REPLIES['General'];
+        
+        let prefix = '';
+        if (apiResponse.status === 429) {
+          prefix = `⚠️ **[Free Tier Rate Limit Exceeded (429)]**\nYou have temporarily hit Google's Gemini free-tier rate limit of 15 requests per minute. The Doubt Solver has automatically activated **Offline Heuristic Mode** to keep your revision active with expert pre-loaded architecture notes!\n\n`;
+        }
+        
+        const text = prefix + (OFFLINE_REPLIES[topicKey] || OFFLINE_REPLIES['General']);
         return NextResponse.json({ success: true, text });
       }
 
