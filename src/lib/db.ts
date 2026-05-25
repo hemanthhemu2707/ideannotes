@@ -114,13 +114,13 @@ async function initDb(pool: sql.ConnectionPool) {
       END
 
       -- Add Email to Users if it doesn't exist
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'Email')
+      IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Users' AND COLUMN_NAME = 'Email')
       BEGIN
           ALTER TABLE Users ADD Email VARCHAR(150) NULL;
       END
 
       -- Add IsApproved to Users if it doesn't exist
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'IsApproved')
+      IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Users' AND COLUMN_NAME = 'IsApproved')
       BEGIN
           ALTER TABLE Users ADD IsApproved BIT NOT NULL DEFAULT 0;
       END
@@ -167,7 +167,7 @@ async function initDb(pool: sql.ConnectionPool) {
       END
 
       -- Add Email to Comments if it doesn't exist
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Comments') AND name = 'Email')
+      IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Comments' AND COLUMN_NAME = 'Email')
       BEGIN
           ALTER TABLE Comments ADD Email VARCHAR(150) NULL;
       END
