@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     }
 
     // Attempt Real Gemini API Generation using the user's key
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyAICOXz1Ddn_mvPMRts65X76YxWBTySWzQ';
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     
     console.log('Initiating Gemini API call for prompt:', prompt);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;

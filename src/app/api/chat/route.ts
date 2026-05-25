@@ -169,7 +169,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Resolve Gemini API Endpoint
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyAICOXz1Ddn_mvPMRts65X76YxWBTySWzQ';
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
     // 3. Assemble Conversational History into Gemini Format
