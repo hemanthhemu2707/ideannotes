@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   ArrowLeft, 
   Edit3, 
@@ -17,6 +18,7 @@ import {
   Copy,
   ChevronRight,
   BookOpen,
+  Folder,
   MessageSquare,
   Send,
   Trash2,
@@ -25,7 +27,9 @@ import {
 } from 'lucide-react';
 import hljs from 'highlight.js';
 import { useToast } from '@/components/Toast';
-import { Note } from '@/lib/notes';
+import { Note, Category } from '@/lib/notes';
+
+const PreContext = React.createContext(false);
 
 // Copy Button Component for Code Blocks
 function CopyButton({ text }: { text: string }) {
@@ -40,7 +44,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-slate-100 rounded-lg text-[10px] font-bold flex items-center gap-1.5 shadow-md"
+      className="px-2.5 py-1 bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-slate-100 rounded-lg text-[10px] font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all duration-150"
     >
       {copied ? (
         <>
@@ -77,6 +81,17 @@ export default function ReadNote() {
   const [headings, setHeadings] = useState<HeadingItem[]>([]);
   const [activeHeadingId, setActiveHeadingId] = useState('');
   const [currentUser, setCurrentUser] = useState<{ username: string; role: string } | null>(null);
+  
+  const [relatedNotes, setRelatedNotes] = useState<Note[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  const getRawText = (node: any): string => {
+    if (!node) return '';
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(getRawText).join('');
+    if (node.props && node.props.children) return getRawText(node.props.children);
+    return '';
+  };
 
   // Fetch session user on mount
   useEffect(() => {
@@ -132,6 +147,48 @@ export default function ReadNote() {
       });
   }, [categoryFolder, slug]);
 
+  // Fetch related notes in the same category & all categories
+  useEffect(() => {
+    if (!note) return;
+
+    // Fetch related notes
+    fetch(`/api/notes?category=${note.categoryFolder}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.notes) {
+          setRelatedNotes(data.notes);
+        }
+      })
+      .catch(err => console.error('Failed to fetch related notes:', err));
+
+    // Fetch all categories
+    fetch('/api/categories')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.categories) {
+          setCategories(data.categories);
+        }
+      })
+      .catch(err => console.error('Failed to fetch categories:', err));
+  }, [note?.categoryFolder]);
+
+  // Assign IDs to DOM headings sequentially to ensure scroll spy and TOC clicks align perfectly
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || headings.length === 0) return;
+
+    const timer = setTimeout(() => {
+      const domHeadings = container.querySelectorAll('h1, h2, h3');
+      domHeadings.forEach((el, index) => {
+        if (headings[index]) {
+          el.id = headings[index].id;
+        }
+      });
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [headings, note?.content]);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Track Reading Scroll Progress
@@ -147,16 +204,24 @@ export default function ReadNote() {
       }
 
       // Track active heading based on viewport position
-      const headingsElements = headings.map(h => document.getElementById(h.id)).filter(Boolean);
-      let currentActiveId = '';
+      const headingsElements = headings.map(h => document.getElementById(h.id)).filter(Boolean) as HTMLElement[];
+      
+      // Default to first heading if at the top
+      let currentActiveId = headingsElements[0]?.id || '';
       
       for (const el of headingsElements) {
         if (el) {
           const rect = el.getBoundingClientRect();
-          if (rect.top <= 160) {
+          if (rect.top <= 120) {
             currentActiveId = el.id;
           }
         }
+      }
+
+      // If at the bottom of container, default to last heading
+      const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 10;
+      if (isAtBottom && headingsElements.length > 0) {
+        currentActiveId = headingsElements[headingsElements.length - 1].id;
       }
       
       if (currentActiveId) {
@@ -164,25 +229,39 @@ export default function ReadNote() {
       }
     };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    container.addEventListener('scroll', handleScroll);
+    
+    // Tiny timeout to ensure DOM painting is complete
+    const timer = setTimeout(handleScroll, 100);
+    
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      clearTimeout(timer);
+    };
   }, [headings]);
 
   // Extract headings from markdown content
   const extractHeadings = (text: string): HeadingItem[] => {
     const lines = text.split('\n');
     const headingList: HeadingItem[] = [];
+    const idCounts: Record<string, number> = {};
 
     lines.forEach((line) => {
       const match = line.match(/^(#{1,3})\s+(.+)$/);
       if (match) {
         const level = match[1].length;
         const rawText = match[2].trim().replace(/[#*`[\]()]/g, '');
-        // Create matching slugified ID
-        const id = rawText
+        const baseId = rawText
           .toLowerCase()
           .replace(/[\s_]+/g, '-')
           .replace(/[^\w-]/g, '');
+        
+        let id = baseId;
+        const currentCount = idCounts[baseId] || 0;
+        if (currentCount > 0) {
+          id = `${baseId}-${currentCount}`;
+        }
+        idCounts[baseId] = currentCount + 1;
           
         headingList.push({ id, text: rawText, level });
       }
@@ -312,7 +391,7 @@ export default function ReadNote() {
   const isAdmin = currentUser?.role === 'Admin';
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-bg-app relative">
+    <div className="flex-grow h-full flex flex-col overflow-hidden bg-bg-app relative">
       {/* Dynamic Scroll Progress Bar */}
       <div 
         className="fixed top-0 left-0 h-1 bg-gradient-to-r from-accent-app to-indigo-500 z-50 transition-all duration-75"
@@ -433,26 +512,32 @@ export default function ReadNote() {
               {/* Render parsed Markdown with highlighted code custom renderers */}
               <div className="prose">
                 <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
                   components={{
-                    h1: ({ children }) => {
-                      const id = String(children).toLowerCase().replace(/[\s_]+/g, '-').replace(/[^\w-]/g, '');
-                      return <h1 id={id}>{children}</h1>;
-                    },
-                    h2: ({ children }) => {
-                      const id = String(children).toLowerCase().replace(/[\s_]+/g, '-').replace(/[^\w-]/g, '');
-                      return <h2 id={id}>{children}</h2>;
-                    },
-                    h3: ({ children }) => {
-                      const id = String(children).toLowerCase().replace(/[\s_]+/g, '-').replace(/[^\w-]/g, '');
-                      return <h3 id={id}>{children}</h3>;
+                    h1: ({ children }) => <h1>{children}</h1>,
+                    h2: ({ children }) => <h2>{children}</h2>,
+                    h3: ({ children }) => <h3>{children}</h3>,
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-6 rounded-xl border border-border-app/40 bg-black/5">
+                        <table className="min-w-full divide-y divide-border-app/40">
+                          {children}
+                        </table>
+                      </div>
+                    ),
+                    pre: ({ children }) => {
+                      return (
+                        <PreContext.Provider value={true}>
+                          {children}
+                        </PreContext.Provider>
+                      );
                     },
                     code({ node, className, children, ...props }) {
                       const match = /language-(\w+)/.exec(className || '');
                       const codeText = String(children).replace(/\n$/, '');
-                      const isInline = !match;
+                      const inPre = React.useContext(PreContext);
 
-                      if (!isInline) {
-                        const lang = match[1];
+                      if (inPre) {
+                        const lang = match ? match[1] : 'text';
                         let highlightedHtml = codeText;
                         try {
                           if (hljs.getLanguage(lang)) {
@@ -461,18 +546,18 @@ export default function ReadNote() {
                             highlightedHtml = hljs.highlightAuto(codeText).value;
                           }
                         } catch (e) {
-                          highlightedHtml = hljs.highlightAuto(codeText).value;
+                          console.error("Syntax highlighting failed", e);
                         }
-                        
+
                         return (
-                          <div className="relative group my-5">
-                            <pre className="!bg-black/35 !border !border-border-app/50 !rounded-2xl !p-3.5 sm:!p-5 overflow-x-auto">
-                              <code 
-                                className={`hljs ${className}`}
-                                dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-                              />
+                          <div className="relative group my-4 rounded-xl overflow-hidden bg-[#090d16] border border-border-app/50 shadow-md">
+                            <div className="flex items-center justify-between px-4 py-1.5 bg-white/5 border-b border-white/10">
+                              <span className="text-[10px] uppercase font-bold text-text-muted tracking-wider font-mono">{lang}</span>
+                              <CopyButton text={codeText} />
+                            </div>
+                            <pre className="p-4 max-h-[350px] overflow-y-auto text-xs text-text-primary/90 font-mono whitespace-pre-wrap break-all overflow-x-hidden">
+                              <code dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
                             </pre>
-                            <CopyButton text={codeText} />
                           </div>
                         );
                       }
@@ -487,6 +572,63 @@ export default function ReadNote() {
                 >
                   {note.content}
                 </ReactMarkdown>
+              </div>
+
+              {/* Navigation Links block at the end of note content */}
+              <div className="mt-12 p-6 rounded-2xl bg-surface-app/50 border border-border-app/45 space-y-6">
+                
+                {/* Related Notes in Same Category */}
+                <div>
+                  <h4 className="text-xs font-bold text-accent-app uppercase tracking-wider mb-3 flex items-center gap-1.5 select-none">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    More in {note.metadata.category}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {relatedNotes.length <= 1 ? (
+                      <p className="text-xs text-text-muted italic">No other notes in this category.</p>
+                    ) : (
+                      relatedNotes
+                        .filter(n => n.slug !== note.slug) // Exclude current note
+                        .slice(0, 4) // Show up to 4 notes
+                        .map(n => (
+                          <Link
+                            key={n.slug}
+                            href={`/read/${n.categoryFolder}/${n.slug}`}
+                            className="p-3.5 rounded-xl bg-black/10 border border-border-app/30 hover:border-accent-app/40 hover:bg-black/20 transition-all text-xs font-bold text-text-primary flex items-center gap-2 group cursor-pointer"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-accent-app group-hover:scale-125 transition-transform" />
+                            <span className="truncate">{n.metadata.title}</span>
+                          </Link>
+                        ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Separator line */}
+                <div className="h-px bg-border-app/30" />
+
+                {/* Main Categories Navigation */}
+                <div>
+                  <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3 flex items-center gap-1.5 select-none">
+                    <Folder className="w-3.5 h-3.5" />
+                    Browse Other Categories
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {categories
+                      .filter(c => c.slug !== note.categoryFolder) // Exclude current category
+                      .map(c => (
+                        <Link
+                          key={c.slug}
+                          href={`/?category=${c.slug}`}
+                          className="px-3 py-1.5 rounded-lg bg-black/20 border border-border-app/40 hover:border-accent-app hover:bg-accent-app/5 text-[11px] font-bold text-text-muted hover:text-text-primary transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Folder className="w-3.5 h-3.5 text-text-muted/65" />
+                          <span>{c.name}</span>
+                        </Link>
+                      ))
+                    }
+                  </div>
+                </div>
               </div>
 
               {/* Experience Sharing Social Panel */}
@@ -506,7 +648,7 @@ export default function ReadNote() {
             {headings.length === 0 ? (
               <p className="text-xs text-text-muted italic">No headings found in this document.</p>
             ) : (
-              <div className="space-y-2 border-l border-border-app/55">
+              <div className="space-y-1 border-l border-border-app/40">
                 {headings.map((h) => (
                   <a
                     key={h.id}
@@ -514,16 +656,23 @@ export default function ReadNote() {
                     onClick={(e) => {
                       e.preventDefault();
                       const element = document.getElementById(h.id);
-                      if (element && scrollContainerRef.current) {
-                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      const container = scrollContainerRef.current;
+                      if (element && container) {
+                        const containerRect = container.getBoundingClientRect();
+                        const elementRect = element.getBoundingClientRect();
+                        const offset = elementRect.top - containerRect.top + container.scrollTop;
+                        container.scrollTo({
+                          top: offset - 20,
+                          behavior: 'smooth'
+                        });
                       }
                     }}
-                    className={`block text-xs py-1 transition-all pr-4 ${
-                      h.level === 1 ? 'pl-4 font-bold' : h.level === 2 ? 'pl-7' : 'pl-10 text-[11px]'
+                    className={`block text-xs py-1.5 pr-4 transition-all duration-200 border-l-2 ${
+                      h.level === 1 ? 'pl-4 font-semibold' : h.level === 2 ? 'pl-7' : 'pl-10 text-[11px]'
                     } ${
                       activeHeadingId === h.id 
-                        ? 'text-accent-app border-l border-accent-app -ml-px font-semibold' 
-                        : 'text-text-muted hover:text-text-primary'
+                        ? 'text-accent-app border-accent-app bg-accent-app/5 font-bold -ml-[1.5px] rounded-r-lg shadow-sm shadow-accent-app/5' 
+                        : 'text-text-muted border-transparent hover:text-text-primary hover:bg-white/[0.02]'
                     }`}
                   >
                     {h.text}

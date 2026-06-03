@@ -21,7 +21,9 @@ import {
   Network,
   CheckSquare,
   AlertCircle,
-  ChevronRight
+  ChevronRight,
+  Briefcase,
+  User
 } from 'lucide-react';
 import { Note } from '@/lib/notes';
 
@@ -57,6 +59,7 @@ export default function Dashboard() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  const [experiences, setExperiences] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
@@ -96,6 +99,10 @@ export default function Dashboard() {
       const chkRes = await fetch('/api/checklist');
       const chkData = await chkRes.json();
       if (chkData.success) setChecklist(chkData.checklist);
+
+      const expRes = await fetch('/api/interviews');
+      const expData = await expRes.json();
+      if (expData.success) setExperiences(expData.experiences);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
@@ -378,6 +385,72 @@ export default function Dashboard() {
                       </span>
                       <span className="text-[10px] text-accent-app font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
                         Read Note <ArrowRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </motion.div>
+
+          {/* Shared Interview Experiences Section */}
+          <motion.div variants={itemVariants} className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <Briefcase className="w-4.5 h-4.5 text-accent-app" />
+                <span>Shared Interview Experiences</span>
+              </h2>
+              <Link href="/interviews" className="text-[10px] font-bold text-accent-app hover:underline flex items-center gap-0.5">
+                View All <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            {experiences.length === 0 ? (
+              <div className="glass-panel p-8 text-center text-text-muted rounded-2xl text-xs border-dashed border-border-app/60">
+                No interview experiences shared yet. Click "View All" or go to the Interviews menu to share yours!
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {experiences.slice(0, 4).map((exp) => (
+                  <Link 
+                    key={exp.id} 
+                    href="/interviews"
+                    className="glass-panel p-5 rounded-2xl border border-border-app hover:border-accent-app/50 bg-surface-app/20 hover:bg-surface-app/40 hover:scale-[1.01] transition-all flex flex-col group h-full justify-between shadow-sm"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <span className="text-[9px] font-bold text-accent-app bg-accent-app/10 px-2 py-0.5 rounded-md border border-accent-app/15 uppercase tracking-wider">
+                          {exp.companyName}
+                        </span>
+                        <span className="text-[9px] font-bold text-text-muted">
+                          {exp.round}
+                        </span>
+                      </div>
+                      <h3 className="font-bold text-text-primary group-hover:text-accent-app transition-colors text-sm line-clamp-1">
+                        Questions list shared by {exp.interviewerName}
+                      </h3>
+                      <ul className="text-xs text-text-muted mt-2 space-y-1">
+                        {exp.questions.slice(0, 2).map((q: any, qIdx: number) => (
+                          <li key={q.id} className="truncate flex items-start gap-1">
+                            <span className="text-accent-app font-bold">Q{qIdx + 1}:</span>
+                            <span className="truncate">{q.questionText}</span>
+                          </li>
+                        ))}
+                        {exp.questions.length > 2 && (
+                          <li className="italic text-[10px] text-text-muted/65 pt-1">
+                            + {exp.questions.length - 2} more questions
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-text-muted mt-4 pt-3 border-t border-border-app/40 w-full">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-text-muted/65" />
+                        <span>{new Date(exp.interviewDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </span>
+                      <span className="text-[10px] text-accent-app font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                        Explore Q&As <ArrowRight className="w-3.5 h-3.5" />
                       </span>
                     </div>
                   </Link>

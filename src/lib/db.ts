@@ -182,6 +182,83 @@ async function initDb(pool: sql.ConnectionPool) {
           );
       END
 
+      -- 6c. Create InterviewExperiences Table
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'InterviewExperiences')
+      BEGIN
+          CREATE TABLE InterviewExperiences (
+              Id INT IDENTITY(1,1) PRIMARY KEY,
+              CompanyName NVARCHAR(150) NOT NULL,
+              Round NVARCHAR(100) NOT NULL,
+              InterviewDate DATETIME2 NOT NULL,
+              InterviewerName NVARCHAR(100) NOT NULL,
+              CreatedDate DATETIME2 NOT NULL DEFAULT GETDATE()
+          );
+          CREATE INDEX IX_Experiences_Company ON InterviewExperiences(CompanyName);
+          CREATE INDEX IX_Experiences_Date ON InterviewExperiences(InterviewDate DESC);
+      END
+
+      -- 6d. Create InterviewQuestions Table
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'InterviewQuestions')
+      BEGIN
+          CREATE TABLE InterviewQuestions (
+              Id INT IDENTITY(1,1) PRIMARY KEY,
+              ExperienceId INT FOREIGN KEY REFERENCES InterviewExperiences(Id) ON DELETE CASCADE,
+              QuestionText NVARCHAR(MAX) NOT NULL,
+              CreatedDate DATETIME2 NOT NULL DEFAULT GETDATE()
+          );
+          CREATE INDEX IX_Questions_Experience ON InterviewQuestions(ExperienceId);
+      END
+
+      -- 6e. Create InterviewAnswers Table
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'InterviewAnswers')
+      BEGIN
+          CREATE TABLE InterviewAnswers (
+              Id INT IDENTITY(1,1) PRIMARY KEY,
+              QuestionId INT FOREIGN KEY REFERENCES InterviewQuestions(Id) ON DELETE CASCADE,
+              Username VARCHAR(100) NOT NULL,
+              AnswerText NVARCHAR(MAX) NOT NULL,
+              UpdatedDate DATETIME2 NOT NULL DEFAULT GETDATE(),
+              CONSTRAINT UQ_Question_User UNIQUE (QuestionId, Username)
+          );
+          CREATE INDEX IX_Answers_Question ON InterviewAnswers(QuestionId);
+      END
+
+      -- 6f. Create ChatGroups Table
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ChatGroups')
+      BEGIN
+          CREATE TABLE ChatGroups (
+              Id INT IDENTITY(1,1) PRIMARY KEY,
+              Name NVARCHAR(100) NOT NULL UNIQUE,
+              Description NVARCHAR(250) NULL,
+              CreatedBy VARCHAR(100) NOT NULL,
+              CreatedDate DATETIME2 NOT NULL DEFAULT GETDATE()
+          );
+      END
+
+      -- 6g. Create ChatMessages Table
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ChatMessages')
+      BEGIN
+          CREATE TABLE ChatMessages (
+              Id INT IDENTITY(1,1) PRIMARY KEY,
+              GroupId INT FOREIGN KEY REFERENCES ChatGroups(Id) ON DELETE CASCADE,
+              Username VARCHAR(100) NOT NULL,
+              MessageText NVARCHAR(MAX) NOT NULL,
+              CreatedDate DATETIME2 NOT NULL DEFAULT GETDATE()
+          );
+          CREATE INDEX IX_ChatMessages_Group ON ChatMessages(GroupId, CreatedDate ASC);
+      END
+
+      -- 6h. Create ChatGroupMembers Table
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ChatGroupMembers')
+      BEGIN
+          CREATE TABLE ChatGroupMembers (
+              GroupId INT FOREIGN KEY REFERENCES ChatGroups(Id) ON DELETE CASCADE,
+              Username VARCHAR(100) NOT NULL,
+              JoinedDate DATETIME2 NOT NULL DEFAULT GETDATE(),
+              PRIMARY KEY (GroupId, Username)
+          );
+      END
+
       -- Ensure default admin is approved
       UPDATE Users SET IsApproved = 1 WHERE Username = 'admin';
 

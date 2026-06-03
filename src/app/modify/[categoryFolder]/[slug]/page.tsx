@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   ArrowLeft, 
   Save, 
@@ -22,6 +23,8 @@ import {
   EyeOff,
   PenTool,
   Loader,
+  Check,
+  Copy,
   Pin,
   Heart
 } from 'lucide-react';
@@ -30,6 +33,38 @@ import { useToast } from '@/components/Toast';
 import { Note, Category } from '@/lib/notes';
 import CategoryComboBox from '@/components/CategoryComboBox';
 import EmojiPicker from '@/components/EmojiPicker';
+import { convertHtmlToMarkdown } from '@/lib/pasteHelper';
+
+const PreContext = React.createContext(false);
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="px-2.5 py-1 bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-slate-100 rounded-lg text-[10px] font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all duration-150"
+    >
+      {copied ? (
+        <>
+          <Check className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="text-emerald-400">Copied!</span>
+        </>
+      ) : (
+        <>
+          <Copy className="w-3.5 h-3.5" />
+          <span>Copy</span>
+        </>
+      )}
+    </button>
+  );
+}
 
 export default function ModifyNote() {
   const params = useParams();
@@ -156,6 +191,30 @@ export default function ModifyNote() {
       textarea.focus();
       textarea.setSelectionRange(start + before.length, start + before.length + selectedText.length);
     }, 50);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = e.clipboardData.getData('text/html');
+    if (html) {
+      e.preventDefault();
+      const markdown = convertHtmlToMarkdown(html);
+      
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+
+      const newVal = text.substring(0, start) + markdown + text.substring(end);
+      setContent(newVal);
+
+      const newCursorPos = start + markdown.length;
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    }
   };
 
   // Inject templates
@@ -467,6 +526,7 @@ Answer detail here
               ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              onPaste={handlePaste}
               placeholder="Edit note markdown..."
               className="w-full h-full bg-transparent border-none text-sm leading-relaxed text-text-primary placeholder-text-muted/40 focus:outline-none focus:ring-0 p-5 resize-none font-mono overflow-y-auto"
             />
@@ -494,6 +554,7 @@ Answer detail here
             <hr className="my-4 border-border-app/40" />
             
             <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
               components={{
                 h1: ({ children }) => {
                   const id = String(children).toLowerCase().replace(/[\s_]+/g, '-').replace(/[^\w-]/g, '');
@@ -503,13 +564,27 @@ Answer detail here
                   const id = String(children).toLowerCase().replace(/[\s_]+/g, '-').replace(/[^\w-]/g, '');
                   return <h2 id={id}>{children}</h2>;
                 },
+                table: ({ children }) => (
+                  <div className="overflow-x-auto my-6 rounded-xl border border-border-app/40 bg-black/5">
+                    <table className="min-w-full divide-y divide-border-app/40">
+                      {children}
+                    </table>
+                  </div>
+                ),
+                pre: ({ children }) => {
+                  return (
+                    <PreContext.Provider value={true}>
+                      {children}
+                    </PreContext.Provider>
+                  );
+                },
                 code({ node, className, children, ...props }) {
                   const match = /language-(\w+)/.exec(className || '');
                   const codeText = String(children).replace(/\n$/, '');
-                  const isInline = !match;
+                  const inPre = React.useContext(PreContext);
 
-                  if (!isInline) {
-                    const lang = match[1];
+                  if (inPre) {
+                    const lang = match ? match[1] : 'text';
                     let highlightedHtml = codeText;
                     try {
                       if (hljs.getLanguage(lang)) {
@@ -522,12 +597,18 @@ Answer detail here
                     }
                     
                     return (
-                      <pre className="!bg-[#090d16] !border !border-border-app/50 !rounded-xl !p-4 my-4 overflow-x-auto">
-                        <code 
-                          className={`hljs ${className}`}
-                          dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-                        />
-                      </pre>
+                      <div className="relative group my-4 rounded-xl overflow-hidden bg-[#090d16] border border-border-app/50 shadow-md">
+                        <div className="flex items-center justify-between px-4 py-1.5 bg-white/5 border-b border-white/10">
+                          <span className="text-[10px] uppercase font-bold text-text-muted tracking-wider font-mono">{lang}</span>
+                          <CopyButton text={codeText} />
+                        </div>
+                        <pre className="p-4 max-h-[350px] overflow-y-auto text-xs text-text-primary/90 font-mono whitespace-pre-wrap break-all overflow-x-hidden">
+                          <code 
+                            className={`hljs ${className || ''}`}
+                            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+                          />
+                        </pre>
+                      </div>
                     );
                   }
 

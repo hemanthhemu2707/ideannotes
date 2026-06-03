@@ -18,7 +18,9 @@ import {
   Folder,
   Palette,
   FileText,
-  MessageSquareCode
+  MessageSquareCode,
+  Moon,
+  Sun
 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import LoginModal from './LoginModal';
@@ -566,10 +568,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
   const isAdmin = currentUser?.role === 'Admin';
-  const isWritePage = pathname === '/add' || pathname.startsWith('/modify/') || pathname.startsWith('/read/');
+  const isWritePage = pathname === '/add' || pathname.startsWith('/modify/') || pathname === '/login';
+  const isLayoutPage = pathname === '/chat' || pathname === '/add' || pathname.startsWith('/modify/') || pathname.startsWith('/read/');
 
   return (
-    <div className="flex min-h-screen w-full bg-bg-app overflow-hidden">
+    <div className="flex h-screen w-screen bg-bg-app overflow-hidden">
       
       {/* 1. Desktop Sidebar */}
       {!isWritePage && (
@@ -627,7 +630,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Dynamic Margin Top for Mobile Viewport to clear Header */}
-        <main className={`flex-1 overflow-y-auto bg-bg-app flex flex-col relative ${
+        <main className={`flex-1 bg-bg-app flex flex-col relative ${
+          isLayoutPage ? 'overflow-hidden' : 'overflow-y-auto'
+        } ${
           !isWritePage ? 'pt-14 pb-16 md:pt-0 md:pb-0' : ''
         }`}>
           {children}
@@ -718,23 +723,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Quick Themes inside Drawer */}
-            <div className="mb-6 bg-black/10 p-3 rounded-xl border border-border-app/40 select-none">
-              <div className="flex items-center gap-1.5 text-[9px] font-bold text-text-muted/60 uppercase tracking-widest mb-2">
-                <Palette className="w-3.5 h-3.5 text-text-muted/50" />
-                Mobile Theme
-              </div>
-              <div className="flex items-center justify-between">
-                {themes.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setTheme(t.id)}
-                    style={{ backgroundColor: t.color }}
-                    className={`w-5 h-5 rounded-full border cursor-pointer transition-all ${
-                      theme === t.id ? 'border-text-primary scale-110 ring-2 ring-accent-app/50' : 'border-transparent'
-                    }`}
-                  />
-                ))}
-              </div>
+            <div className="mb-6 select-none">
+              <button
+                onClick={() => setTheme(theme === 'slate' ? 'light' : 'slate')}
+                className="w-full flex items-center justify-between bg-black/20 p-2.5 rounded-xl border border-border-app/40 hover:bg-black/30 transition-all cursor-pointer text-xs font-semibold text-text-muted hover:text-text-primary"
+              >
+                <div className="flex items-center gap-2">
+                  {theme === 'slate' ? (
+                    <>
+                      <Moon className="w-4 h-4 text-accent-app" />
+                      <span>Dark Theme</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sun className="w-4 h-4 text-yellow-500" />
+                      <span>White Theme</span>
+                    </>
+                  )}
+                </div>
+                <span className="text-[10px] text-text-muted/60 uppercase font-bold bg-white/5 border border-border-app/40 px-1.5 py-0.5 rounded">
+                  Toggle
+                </span>
+              </button>
             </div>
 
             {/* Category Listing */}

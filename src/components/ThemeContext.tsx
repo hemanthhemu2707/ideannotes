@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-export type Theme = 'slate' | 'light' | 'cyberpunk' | 'ocean' | 'forest' | 'obsidian';
+export type Theme = 'slate' | 'light';
 
 export interface ThemeContextType {
   theme: Theme;
@@ -17,23 +17,19 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
   const themes = [
     { id: 'slate', name: 'Slate Dark', color: '#3B82F6' },
-    { id: 'light', name: 'Light Pristine', color: '#FFFFFF' },
-    { id: 'cyberpunk', name: 'Cyberpunk Neo', color: '#EC4899' },
-    { id: 'ocean', name: 'Ocean Glass', color: '#06B6D4' },
-    { id: 'forest', name: 'Forest Emerald', color: '#10B981' },
-    { id: 'obsidian', name: 'Midnight Obsidian', color: '#121212' }
+    { id: 'light', name: 'Light Pristine', color: '#FFFFFF' }
   ];
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('devnotes-theme') as Theme;
-    if (savedTheme && ['slate', 'light', 'cyberpunk', 'ocean', 'forest', 'obsidian'].includes(savedTheme)) {
+    if (savedTheme && ['slate', 'light'].includes(savedTheme)) {
       setThemeState(savedTheme);
     }
   }, []);
 
   useEffect(() => {
     // Remove all theme classes
-    const classes = ['theme-slate', 'theme-light', 'theme-cyberpunk', 'theme-ocean', 'theme-forest', 'theme-obsidian'];
+    const classes = ['theme-slate', 'theme-light'];
     document.body.classList.remove(...classes);
     document.documentElement.classList.remove(...classes);
 
@@ -63,3 +59,4 @@ export const useTheme = () => {
   }
   return context;
 };
+

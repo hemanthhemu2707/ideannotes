@@ -32,58 +32,30 @@
   --text-muted: #94A3B8;
 }
 
-.theme-cyberpunk {
-  --bg-app: #050505;
-  --surface-app: #0F0F15;
-  --border-app: #EC4899; /* Neon Pink */
-  --accent-app: #10B981; /* Neon Green */
-  --text-primary: #FFFFFF;
-  --text-muted: #9CA3AF;
-}
-
-.theme-ocean {
-  --bg-app: #061F2E;
-  --surface-app: #0B2B3F;
-  --border-app: #0E7490;
-  --accent-app: #06B6D4; /* Cyan */
-  --text-primary: #ECFDF5;
-  --text-muted: #84A9AC;
-}
-
-.theme-forest {
-  --bg-app: #031C14;
-  --surface-app: #072E22;
-  --border-app: #047857;
-  --accent-app: #10B981; /* Mint Green */
-  --text-primary: #F0FDF4;
-  --text-muted: #7DA391;
-}
-
-.theme-obsidian {
-  --bg-app: #000000;
-  --surface-app: #121212;
-  --border-app: #2A2A2A;
-  --accent-app: #FFFFFF; /* Pure White */
-  --text-primary: #FFFFFF;
-  --text-muted: #888888;
-}
-
 .theme-light {
-  --bg-app: #F8FAFC;
-  --surface-app: #FFFFFF;
-  --border-app: #E2E8F0;
-  --accent-app: #2563EB; /* Premium Royal Blue */
-  --text-primary: #0F172A;
-  --text-muted: #475569;
+  --bg-app: #FFFFFF;
+  --surface-app: #F8FAFC;
+  --border-app: #CBD5E1;
+  --accent-app: #2563EB;
+  --text-primary: #000000;
+  --text-muted: #334155;
   
   color-scheme: light;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
 }
 
 body {
   background-color: var(--bg-app);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  min-height: 100vh;
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
@@ -131,26 +103,26 @@ body {
 .prose {
   font-size: 1.05rem;
   line-height: 1.75;
-  color: #E2E8F0;
+  color: var(--text-primary);
 }
 
 .prose h1, .prose h2, .prose h3, .prose h4 {
-  color: #F8FAFC;
+  color: var(--text-primary);
   font-weight: 700;
   letter-spacing: -0.025em;
   margin-top: 1.5em;
   margin-bottom: 0.5em;
 }
 
-.prose h1 { font-size: 2.25rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 0.3em; }
-.prose h2 { font-size: 1.75rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.2em; }
+.prose h1 { font-size: 2.25rem; border-bottom: 1px solid color-mix(in srgb, var(--border-app) 40%, transparent); padding-bottom: 0.3em; }
+.prose h2 { font-size: 1.75rem; border-bottom: 1px solid color-mix(in srgb, var(--border-app) 20%, transparent); padding-bottom: 0.2em; }
 .prose h3 { font-size: 1.4rem; }
 .prose h4 { font-size: 1.15rem; }
 
 .prose p {
   margin-top: 0.8em;
   margin-bottom: 0.8em;
-  color: #CBD5E1;
+  color: var(--text-primary);
 }
 
 .prose ul, .prose ol {
@@ -165,22 +137,22 @@ body {
 .prose li {
   margin-top: 0.3em;
   margin-bottom: 0.3em;
-  color: #CBD5E1;
+  color: var(--text-primary);
 }
 
 .prose blockquote {
   font-style: italic;
-  border-left: 4px solid #3B82F6;
-  background-color: rgba(59, 130, 246, 0.06);
+  border-left: 4px solid var(--accent-app);
+  background-color: color-mix(in srgb, var(--accent-app) 6%, transparent);
   padding: 0.75rem 1.25rem;
   border-radius: 0 8px 8px 0;
   margin: 1.5em 0;
-  color: #93C5FD;
+  color: var(--accent-app);
 }
 
 .prose blockquote p {
   margin: 0;
-  color: #93C5FD;
+  color: var(--text-primary);
 }
 
 .prose code {
@@ -217,37 +189,37 @@ body {
   width: 100%;
   margin: 1.5em 0;
   border-collapse: collapse;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-app);
   font-size: 0.95rem;
 }
 
 .prose th {
-  background-color: rgba(30, 41, 59, 0.6);
-  color: #F8FAFC;
+  background-color: color-mix(in srgb, var(--surface-app) 30%, transparent);
+  color: var(--text-primary);
   font-weight: 600;
   text-align: left;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 2px solid var(--border-app);
   padding: 0.75rem 1rem;
 }
 
 .prose td {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: #CBD5E1;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-app) 30%, transparent);
+  color: var(--text-muted);
 }
 
 .prose tr:hover {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: color-mix(in srgb, var(--surface-app) 15%, transparent);
 }
 
 .prose a {
-  color: #3B82F6;
+  color: var(--accent-app);
   text-decoration: underline;
   text-underline-offset: 4px;
 }
 
 .prose a:hover {
-  color: #60A5FA;
+  color: color-mix(in srgb, var(--accent-app) 80%, var(--text-primary));
 }
 
 .prose hr {

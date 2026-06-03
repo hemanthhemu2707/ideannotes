@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import hljs from 'highlight.js';
+import remarkGfm from 'remark-gfm';
 import { 
   MessageSquareCode, 
   Send, 
@@ -24,6 +25,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 
+const PreContext = React.createContext(false);
+
 // Code Copy Button helper
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -37,7 +40,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 px-2.5 py-1.5 bg-slate-900/90 border border-slate-700/80 text-slate-300 hover:text-slate-100 rounded-lg text-[10px] font-bold flex items-center gap-1.5 shadow-md z-10 cursor-pointer"
+      className="px-2.5 py-1 bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-slate-100 rounded-lg text-[10px] font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all duration-150"
     >
       {copied ? (
         <>
@@ -396,14 +399,29 @@ export default function DoubtSolverChat() {
                         /* Rich Markdown parser for Bot responses */
                         <div className="prose prose-chat">
                           <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
                             components={{
+                              table: ({ children }) => (
+                                <div className="overflow-x-auto my-4 rounded-xl border border-border-app/40 bg-black/10">
+                                  <table className="min-w-full divide-y divide-border-app/40">
+                                    {children}
+                                  </table>
+                                </div>
+                              ),
+                              pre: ({ children }) => {
+                                return (
+                                  <PreContext.Provider value={true}>
+                                    {children}
+                                  </PreContext.Provider>
+                                );
+                              },
                               code({ node, className, children, ...props }) {
                                 const match = /language-(\w+)/.exec(className || '');
                                 const codeText = String(children).replace(/\n$/, '');
-                                const isInline = !match;
+                                const inPre = React.useContext(PreContext);
 
-                                if (!isInline) {
-                                  const lang = match[1];
+                                if (inPre) {
+                                  const lang = match ? match[1] : 'text';
                                   let highlightedHtml = codeText;
                                   try {
                                     if (hljs.getLanguage(lang)) {
@@ -416,14 +434,17 @@ export default function DoubtSolverChat() {
                                   }
                                   
                                   return (
-                                    <div className="relative group my-4">
-                                      <pre className="!bg-black/35 !border !border-border-app/40 !rounded-xl !p-3 overflow-x-auto">
+                                    <div className="relative group my-4 rounded-xl overflow-hidden bg-black/35 border border-border-app/40 shadow-md">
+                                      <div className="flex items-center justify-between px-4 py-1.5 bg-white/5 border-b border-white/10">
+                                        <span className="text-[10px] uppercase font-bold text-text-muted tracking-wider font-mono">{lang}</span>
+                                        <CopyButton text={codeText} />
+                                      </div>
+                                      <pre className="p-3 max-h-[300px] overflow-y-auto text-xs text-text-primary/95 font-mono whitespace-pre-wrap break-all overflow-x-hidden">
                                         <code 
-                                          className={`hljs ${className}`}
+                                          className={`hljs ${className || ''}`}
                                           dangerouslySetInnerHTML={{ __html: highlightedHtml }}
                                         />
                                       </pre>
-                                      <CopyButton text={codeText} />
                                     </div>
                                   );
                                 }

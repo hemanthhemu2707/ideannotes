@@ -24,13 +24,40 @@ import {
   CheckCircle,
   FolderPlus,
   X,
-  User
+  User,
+  ChevronDown,
+  ChevronRight,
+  Network
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 import { Note, Category } from '@/lib/notes';
 import { emojiSearchMatch } from '@/lib/emojiSearch';
 import EmojiPicker from '@/components/EmojiPicker';
+
+// ─── Category Tree helpers (mirroring Sidebar logic) ─────────────────────────
+interface CategoryTreeNode {
+  slug: string;
+  name: string;
+  icon: string;
+  parentSlug?: string | null;
+  children: CategoryTreeNode[];
+}
+
+function buildCategoryTree(categories: Category[]): CategoryTreeNode[] {
+  const map: Record<string, CategoryTreeNode> = {};
+  const roots: CategoryTreeNode[] = [];
+  categories.forEach(cat => { map[cat.slug] = { ...cat, children: [] }; });
+  categories.forEach(cat => {
+    const node = map[cat.slug];
+    if (cat.parentSlug && map[cat.parentSlug]) {
+      map[cat.parentSlug].children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  return roots;
+}
 
 function ManageNotesContent() {
   const searchParams = useSearchParams();
@@ -46,7 +73,7 @@ function ManageNotesContent() {
   
   // UI States
   const [currentTab, setCurrentTab] = useState<'active' | 'trash' | 'categories' | 'users'>('active');
-  const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
+  const [viewLayout, setViewLayout] = useState<'grid' | 'table' | 'hierarchy'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   
@@ -657,6 +684,7 @@ function ManageNotesContent() {
             <div className="flex items-center gap-1.5 p-1 bg-black/20 border border-border-app rounded-xl self-end md:self-auto select-none">
               <button
                 onClick={() => setViewLayout('grid')}
+                title="Grid View"
                 className={`p-2 rounded-lg transition-all cursor-pointer ${
                   viewLayout === 'grid' 
                     ? 'bg-surface-app text-accent-app' 
@@ -667,6 +695,7 @@ function ManageNotesContent() {
               </button>
               <button
                 onClick={() => setViewLayout('table')}
+                title="Table View"
                 className={`p-2 rounded-lg transition-all cursor-pointer ${
                   viewLayout === 'table' 
                     ? 'bg-surface-app text-accent-app' 
@@ -674,6 +703,17 @@ function ManageNotesContent() {
                 }`}
               >
                 <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewLayout('hierarchy')}
+                title="Hierarchy View"
+                className={`p-2 rounded-lg transition-all cursor-pointer ${
+                  viewLayout === 'hierarchy' 
+                    ? 'bg-surface-app text-accent-app' 
+                    : 'text-text-muted hover:text-text-primary'
+                }`}
+              >
+                <Network className="w-4 h-4" />
               </button>
             </div>
           )}
@@ -818,7 +858,7 @@ function ManageNotesContent() {
               </div>
             ))}
           </div>
-        ) : (
+        ) : viewLayout === 'table' ? (
           /* Tabular Row List Layout */
           <div className="glass-panel rounded-2xl border border-border-app overflow-hidden">
             <div className="overflow-x-auto">
@@ -898,6 +938,18 @@ function ManageNotesContent() {
               </table>
             </div>
           </div>
+        ) : (
+          /* Hierarchy Tree View */
+          <HierarchyView
+            notes={filteredNotes}
+            categories={categories}
+            isAdmin={isAdmin}
+            selectedSlugs={selectedSlugs}
+            onSelectNote={handleSelectNote}
+            onTogglePinned={handleTogglePinned}
+            onToggleFavorite={handleToggleFavorite}
+            onDeleteNote={triggerDeleteNote}
+          />
         )
       ) : currentTab === 'trash' ? (
         /* Soft-Deleted Trash Window */
@@ -1248,5 +1300,210 @@ export default function ManageNotes() {
     }>
       <ManageNotesContent />
     </Suspense>
+  );
+}
+
+// ─── Hierarchy View Component ─────────────────────────────────────────────────
+interface HierarchyViewProps {
+  notes: Note[];
+  categories: Category[];
+  isAdmin: boolean;
+  selectedSlugs: string[];
+  onSelectNote: (slug: string) => void;
+  onTogglePinned: (note: Note) => void;
+  onToggleFavorite: (note: Note) => void;
+  onDeleteNote: (categoryFolder: string, slug: string, permanent: boolean) => void;
+}
+
+function HierarchyCategoryNode({ 
+  node, 
+  allNotes, 
+  depth, 
+  isAdmin, 
+  selectedSlugs, 
+  onSelectNote, 
+  onTogglePinned, 
+  onToggleFavorite,
+  onDeleteNote 
+}: { 
+  node: CategoryTreeNode; 
+  allNotes: Note[]; 
+  depth: number; 
+  isAdmin: boolean; 
+  selectedSlugs: string[]; 
+  onSelectNote: (slug: string) => void;
+  onTogglePinned: (note: Note) => void;
+  onToggleFavorite: (note: Note) => void;
+  onDeleteNote: (categoryFolder: string, slug: string, permanent: boolean) => void;
+}) {
+  const [isExpanded, setIsExpanded] = React.useState(depth === 0);
+  const ownNotes = allNotes.filter(n => n.categoryFolder === node.slug);
+  const hasContent = ownNotes.length > 0 || node.children.length > 0;
+  const totalNotes = (function countAll(n: CategoryTreeNode): number {
+    return allNotes.filter(note => note.categoryFolder === n.slug).length + 
+      n.children.reduce((sum, child) => sum + countAll(child), 0);
+  })(node);
+
+  if (!hasContent) return null;
+
+  return (
+    <div style={{ marginLeft: depth > 0 ? `${depth * 16}px` : 0 }}>
+      {/* Category Header */}
+      <button
+        onClick={() => setIsExpanded(e => !e)}
+        className="flex items-center gap-2 w-full p-2.5 rounded-xl hover:bg-white/4 text-left group transition-colors"
+      >
+        <span className="flex items-center justify-center w-5 h-5 shrink-0 text-accent-app/70 group-hover:text-accent-app transition-colors">
+          {isExpanded 
+            ? <ChevronDown className="w-4 h-4" />
+            : <ChevronRight className="w-4 h-4" />
+          }
+        </span>
+        {depth === 0 
+          ? <FolderOpen className="w-4 h-4 text-accent-app shrink-0" />
+          : <Folder className="w-3.5 h-3.5 text-text-muted shrink-0" />
+        }
+        <span className={`font-bold text-text-primary truncate ${depth === 0 ? 'text-sm' : 'text-xs'}`}>
+          {node.name}
+        </span>
+        <span className="ml-auto text-[10px] font-bold text-text-muted bg-black/20 px-1.5 py-0.5 rounded-full shrink-0">
+          {totalNotes}
+        </span>
+      </button>
+
+      {/* Expanded contents */}
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            {/* Sub-categories first */}
+            {node.children.length > 0 && (
+              <div className="mt-1 space-y-0.5">
+                {node.children.map(child => (
+                  <HierarchyCategoryNode
+                    key={child.slug}
+                    node={child}
+                    allNotes={allNotes}
+                    depth={depth + 1}
+                    isAdmin={isAdmin}
+                    selectedSlugs={selectedSlugs}
+                    onSelectNote={onSelectNote}
+                    onTogglePinned={onTogglePinned}
+                    onToggleFavorite={onToggleFavorite}
+                    onDeleteNote={onDeleteNote}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Own notes */}
+            {ownNotes.length > 0 && (
+              <div className="mt-1 mb-2 space-y-1 pl-7">
+                {ownNotes.map(note => (
+                  <div
+                    key={note.slug}
+                    className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all group ${
+                      selectedSlugs.includes(note.slug)
+                        ? 'bg-accent-app/5 border-accent-app/30'
+                        : 'bg-white/2 border-border-app/20 hover:border-border-app/40 hover:bg-white/3'
+                    }`}
+                  >
+                    {isAdmin && (
+                      <input
+                        type="checkbox"
+                        checked={selectedSlugs.includes(note.slug)}
+                        onChange={() => onSelectNote(note.slug)}
+                        className="w-3.5 h-3.5 rounded bg-black/30 border-border-app text-accent-app focus:ring-0 focus:ring-offset-0 cursor-pointer shrink-0"
+                      />
+                    )}
+                    <FileText className="w-3.5 h-3.5 text-text-muted/50 shrink-0" />
+                    <Link
+                      href={`/read/${note.categoryFolder}/${note.slug}`}
+                      className="flex-1 text-xs font-semibold text-text-primary hover:text-accent-app truncate transition-colors min-w-0"
+                    >
+                      {note.metadata.title}
+                    </Link>
+                    <div className="flex items-center gap-2.5 shrink-0 text-text-muted">
+                      {note.metadata.pinned && <Pin className="w-3 h-3 text-indigo-400 rotate-45" />}
+                      {note.metadata.favorite && <Heart className="w-3 h-3 text-rose-500 fill-rose-500/30" />}
+                      <span className="text-[10px] flex items-center gap-0.5 opacity-60">
+                        <Clock className="w-2.5 h-2.5" />{note.readingTime}m
+                      </span>
+                      {isAdmin && (
+                        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Link href={`/modify/${note.categoryFolder}/${note.slug}`} className="text-[10px] font-bold hover:text-accent-app transition-colors cursor-pointer">
+                            Edit
+                          </Link>
+                          <button
+                            onClick={() => onDeleteNote(note.categoryFolder, note.slug, false)}
+                            className="text-[10px] font-bold hover:text-red-400 transition-colors cursor-pointer"
+                          >
+                            Del
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function HierarchyView({ notes, categories, isAdmin, selectedSlugs, onSelectNote, onTogglePinned, onToggleFavorite, onDeleteNote }: HierarchyViewProps) {
+  const tree = buildCategoryTree(categories);
+
+  // Gather notes that belong to categories that exist in tree (or are uncategorized)
+  const categorySlugs = new Set(categories.map(c => c.slug));
+  const uncategorizedNotes = notes.filter(n => !categorySlugs.has(n.categoryFolder));
+
+  return (
+    <div className="glass-panel rounded-2xl border border-border-app p-4 space-y-1">
+      <div className="flex items-center gap-2 px-2 pb-3 border-b border-border-app/30">
+        <Network className="w-4 h-4 text-accent-app" />
+        <span className="text-xs font-extrabold text-text-primary uppercase tracking-wider">Category Hierarchy</span>
+        <span className="ml-auto text-[10px] text-text-muted">{notes.length} notes total</span>
+      </div>
+      {tree.map(rootNode => (
+        <HierarchyCategoryNode
+          key={rootNode.slug}
+          node={rootNode}
+          allNotes={notes}
+          depth={0}
+          isAdmin={isAdmin}
+          selectedSlugs={selectedSlugs}
+          onSelectNote={onSelectNote}
+          onTogglePinned={onTogglePinned}
+          onToggleFavorite={onToggleFavorite}
+          onDeleteNote={onDeleteNote}
+        />
+      ))}
+      {uncategorizedNotes.length > 0 && (
+        <div className="pl-2 space-y-1 pt-2 border-t border-border-app/20">
+          <div className="flex items-center gap-2 px-2 py-1.5">
+            <Folder className="w-4 h-4 text-text-muted/50" />
+            <span className="text-xs font-bold text-text-muted">Uncategorized</span>
+            <span className="text-[10px] text-text-muted/50 ml-auto">{uncategorizedNotes.length}</span>
+          </div>
+          {uncategorizedNotes.map(note => (
+            <div key={note.slug} className="flex items-center gap-3 p-2.5 rounded-xl border bg-white/2 border-border-app/20 hover:border-border-app/40 group ml-6">
+              <FileText className="w-3.5 h-3.5 text-text-muted/50 shrink-0" />
+              <Link href={`/read/${note.categoryFolder}/${note.slug}`} className="flex-1 text-xs font-semibold text-text-primary hover:text-accent-app truncate">
+                {note.metadata.title}
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -26,9 +26,13 @@ import {
   LogOut,
   Palette,
   Calendar,
+  Briefcase,
   FileText,
   X,
-  MessageSquareCode
+  MessageSquareCode,
+  MessageSquare,
+  Moon,
+  Sun
 } from 'lucide-react';
 import CommandPalette from './CommandPalette';
 import LoginModal from './LoginModal';
@@ -705,6 +709,32 @@ export default function Sidebar() {
               {!isCollapsed && <span className="truncate">Schedules & Prep</span>}
             </Link>
 
+            {/* Interview Experiences Link */}
+            <Link
+              href="/interviews"
+              className={`flex items-center gap-3 w-full p-2.5 rounded-xl transition-all text-sm font-medium border ${
+                pathname === '/interviews' 
+                  ? 'bg-accent-app/10 border-accent-app/20 text-accent-app font-semibold' 
+                  : 'text-text-muted hover:text-text-primary hover:bg-white/5 border-transparent hover:border-border-app/40'
+              }`}
+            >
+              <Briefcase className={`w-5 h-5 shrink-0 ${pathname === '/interviews' ? 'text-accent-app' : 'text-text-muted'}`} />
+              {!isCollapsed && <span className="truncate">Interview Experiences</span>}
+            </Link>
+
+            {/* Real-time Group Chat Link */}
+            <Link
+              href="/group-chat"
+              className={`flex items-center gap-3 w-full p-2.5 rounded-xl transition-all text-sm font-medium border ${
+                pathname === '/group-chat' 
+                  ? 'bg-accent-app/10 border-accent-app/20 text-accent-app font-semibold' 
+                  : 'text-text-muted hover:text-text-primary hover:bg-white/5 border-transparent hover:border-border-app/40'
+              }`}
+            >
+              <MessageSquare className={`w-5 h-5 shrink-0 ${pathname === '/group-chat' ? 'text-accent-app' : 'text-text-muted'}`} />
+              {!isCollapsed && <span className="truncate">Community Chat</span>}
+            </Link>
+
             {/* AI Doubt Solver Link */}
             <Link
               href="/chat"
@@ -824,37 +854,35 @@ export default function Sidebar() {
         <div className="border-t border-border-app/60 py-3.5 select-none shrink-0">
           {!isCollapsed ? (
             <div className="px-5">
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-text-muted/60 uppercase tracking-widest mb-2.5">
-                <Palette className="w-3.5 h-3.5 text-text-muted/50" />
-                Theme Selector
-              </div>
-              <div className="flex items-center justify-between bg-black/20 p-2 rounded-xl border border-border-app/40">
-                {themes.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setTheme(t.id)}
-                    title={t.name}
-                    style={{ backgroundColor: t.color }}
-                    className={`w-5 h-5 rounded-full border cursor-pointer transition-all ${
-                      theme === t.id 
-                        ? 'border-text-primary scale-125 shadow-lg shadow-white/10 ring-2 ring-accent-app/50' 
-                        : 'border-transparent hover:scale-110 opacity-75 hover:opacity-100'
-                    }`}
-                  />
-                ))}
-              </div>
+              <button
+                onClick={() => setTheme(theme === 'slate' ? 'light' : 'slate')}
+                className="w-full flex items-center justify-between bg-black/20 p-2.5 rounded-xl border border-border-app/40 hover:bg-black/30 transition-all cursor-pointer text-xs font-semibold text-text-muted hover:text-text-primary"
+              >
+                <div className="flex items-center gap-2">
+                  {theme === 'slate' ? (
+                    <>
+                      <Moon className="w-4 h-4 text-accent-app" />
+                      <span>Dark Theme</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sun className="w-4 h-4 text-yellow-500" />
+                      <span>White Theme</span>
+                    </>
+                  )}
+                </div>
+                <span className="text-[10px] text-text-muted/60 uppercase font-bold bg-white/5 border border-border-app/40 px-1.5 py-0.5 rounded">
+                  Toggle
+                </span>
+              </button>
             </div>
           ) : (
             <button
-              onClick={() => {
-                const currentIndex = themes.findIndex(t => t.id === theme);
-                const nextIndex = (currentIndex + 1) % themes.length;
-                setTheme(themes[nextIndex].id);
-              }}
-              title={`Active Theme: ${themes.find(t => t.id === theme)?.name}. Click to cycle.`}
+              onClick={() => setTheme(theme === 'slate' ? 'light' : 'slate')}
+              title={`Switch to ${theme === 'slate' ? 'White' : 'Dark'} Theme`}
               className="w-full flex justify-center py-2.5 text-text-muted hover:text-text-primary transition-colors cursor-pointer"
             >
-              <Palette className="w-5 h-5" />
+              {theme === 'slate' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5 text-yellow-500" />}
             </button>
           )}
         </div>
