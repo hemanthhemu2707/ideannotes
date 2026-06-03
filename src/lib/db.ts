@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import crypto from 'crypto';
+import { sendEmail } from './mail';
 
 const dbConfig: sql.config = {
   user: 'db51417',
@@ -32,6 +33,7 @@ export function getDbPool(): Promise<sql.ConnectionPool> {
       .then(async (pool) => {
         console.log('Connected to MS SQL Server successfully!');
         await initDb(pool);
+        startUnreadMessagesPoller(pool);
         return pool;
       })
       .catch((err) => {
@@ -259,6 +261,18 @@ async function initDb(pool: sql.ConnectionPool) {
           );
       END
 
+      -- Add LastReadDate to ChatGroupMembers if it doesn't exist
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('ChatGroupMembers') AND name = 'LastReadDate')
+      BEGIN
+          ALTER TABLE ChatGroupMembers ADD LastReadDate DATETIME2 NULL;
+      END
+
+      -- Add LastEmailedDate to ChatGroupMembers if it doesn't exist
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('ChatGroupMembers') AND name = 'LastEmailedDate')
+      BEGIN
+          ALTER TABLE ChatGroupMembers ADD LastEmailedDate DATETIME2 NULL;
+      END
+
       -- Ensure default admin is approved
       UPDATE Users SET IsApproved = 1 WHERE Username = 'admin';
 
@@ -393,4 +407,67 @@ A query is SARGable (Search Argument Able) if the engine can perform an **Index 
   } catch (error) {
     console.error('Failed to initialize database tables:', error);
   }
+}
+
+let pollerStarted = false;
+function startUnreadMessagesPoller(pool: sql.ConnectionPool) {
+  if (pollerStarted) return;
+  pollerStarted = true;
+  console.log('Starting unread messages background poller (1 min interval)...');
+  
+  setInterval(async () => {
+    try {
+      // Find members with unread messages > 1 minute old that haven't been emailed yet
+      const candidates = await pool.request().query(`
+        SELECT DISTINCT m.Username, m.GroupId, g.Name as GroupName, u.Email
+        FROM ChatGroupMembers m
+        JOIN ChatGroups g ON m.GroupId = g.Id
+        JOIN Users u ON m.Username = u.Username
+        WHERE u.Email IS NOT NULL AND u.Email <> ''
+          AND (m.LastEmailedDate IS NULL OR m.LastEmailedDate < (
+              SELECT MAX(CreatedDate) FROM ChatMessages WHERE GroupId = m.GroupId
+          ))
+          AND EXISTS (
+              SELECT 1 FROM ChatMessages msg
+              WHERE msg.GroupId = m.GroupId
+                AND msg.Username <> m.Username
+                AND msg.CreatedDate > COALESCE(m.LastReadDate, m.JoinedDate)
+                AND msg.CreatedDate < DATEADD(minute, -1, GETDATE())
+                AND (m.LastEmailedDate IS NULL OR msg.CreatedDate > m.LastEmailedDate)
+          )
+      `);
+
+      for (const row of candidates.recordset) {
+        const { Username, GroupId, GroupName, Email } = row;
+        console.log(`Sending unread chat notification email to ${Username} for group #${GroupName}...`);
+        
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const chatLink = `${appUrl}/group-chat?select=${GroupId}`;
+        
+        await sendEmail({
+          to: Email,
+          subject: `[DevNotes Hub] You have unread messages in #${GroupName}`,
+          text: `Hello ${Username},\n\nYou have unread messages in the group chat "#${GroupName}" that have been waiting for more than 1 minute.\n\nRead them here: ${chatLink}\n\nHappy collaborating!`,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 500px; border: 1px solid #eee; border-radius: 12px;">
+              <h2 style="color: #6366f1; margin-top: 0;">Unread Messages waiting for you 💬</h2>
+              <p>Hello <strong>${Username}</strong>,</p>
+              <p>You have new unread messages in <strong>#${GroupName}</strong> that have been waiting for over 1 minute.</p>
+              <p>Don't miss out on the conversation. Check back in and collaborate with your team!</p>
+              <a href="${chatLink}" style="display:inline-block;background:#6366f1;color:white;text-decoration:none;padding:10px 20px;font-weight:bold;border-radius:8px;margin-top:10px;">Go to Discussion</a>
+              <p style="font-size:11px;color:#666;margin-top:20px;">DevNotes Hub — Your collaborative dev prep workspace.</p>
+            </div>
+          `
+        });
+
+        // Update LastEmailedDate
+        await pool.request()
+          .input('groupId', sql.Int, GroupId)
+          .input('username', sql.VarChar, Username)
+          .query('UPDATE ChatGroupMembers SET LastEmailedDate = GETDATE() WHERE GroupId = @groupId AND Username = @username');
+      }
+    } catch (err) {
+      console.error('Error in unread messages background poller:', err);
+    }
+  }, 60 * 1000); // 1 minute
 }

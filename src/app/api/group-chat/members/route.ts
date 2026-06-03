@@ -121,39 +121,47 @@ export async function POST(request: Request) {
       .input('username', sql.VarChar, targetUsername)
       .query('INSERT INTO ChatGroupMembers (GroupId, Username) VALUES (@groupId, @username)');
 
-    // Notify the newly added member via email (when added by someone else, not self-join)
-    if (targetUsername !== session.username) {
-      try {
-        const emailRes = await pool.request()
-          .input('username', sql.VarChar, targetUsername)
-          .query('SELECT Email FROM Users WHERE Username = @username');
+    // Notify the newly added member via email
+    try {
+      const emailRes = await pool.request()
+        .input('username', sql.VarChar, targetUsername)
+        .query('SELECT Email FROM Users WHERE Username = @username');
 
-        const userEmail = emailRes.recordset[0]?.Email;
-        const groupName = groupCheck.recordset[0] ? 
-          (await pool.request().input('groupId', sql.Int, groupId).query('SELECT Name FROM ChatGroups WHERE Id = @groupId')).recordset[0]?.Name 
-          : `Group #${groupId}`;
+      const userEmail = emailRes.recordset[0]?.Email;
+      const groupName = groupCheck.recordset[0] ? 
+        (await pool.request().input('groupId', sql.Int, groupId).query('SELECT Name FROM ChatGroups WHERE Id = @groupId')).recordset[0]?.Name 
+        : `Group #${groupId}`;
 
-        if (userEmail) {
-          await sendEmail({
-            to: userEmail,
-            subject: `[DevNotes Hub] You've been added to #${groupName}`,
-            text: `Hello ${targetUsername},\n\nYou have been added to the group chat "#${groupName}" by ${session.username}.\n\nJoin the conversation at: ${process.env.NEXT_PUBLIC_APP_URL || 'https://devnotes-hub.vercel.app'}/group-chat\n\nHappy collaborating!`,
-            html: `
-              <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 500px; border: 1px solid #eee; border-radius: 12px;">
-                <h2 style="color: #6366f1; margin-top: 0;">Added to Group Chat 💬</h2>
-                <p>Hello <strong>${targetUsername}</strong>,</p>
-                <p>You've been added to the discussion channel <strong>#${groupName}</strong> by <strong>${session.username}</strong>.</p>
-                <p>Join the conversation and start collaborating with your team!</p>
-                <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://devnotes-hub.vercel.app'}/group-chat" style="display:inline-block;background:#6366f1;color:white;text-decoration:none;padding:10px 20px;font-weight:bold;border-radius:8px;margin-top:10px;">Open Group Chat</a>
-                <p style="font-size:11px;color:#666;margin-top:20px;">DevNotes Hub — Your collaborative dev prep workspace.</p>
-              </div>
-            `
-          });
-        }
-      } catch (emailErr) {
-        // Don't fail the add-member operation just because email failed
-        console.warn('[group-chat/members] Failed to send member-added notification email:', emailErr);
+      const isSelfJoin = targetUsername === session.username;
+
+      if (userEmail) {
+        await sendEmail({
+          to: userEmail,
+          subject: isSelfJoin 
+            ? `[DevNotes Hub] You joined #${groupName}` 
+            : `[DevNotes Hub] You've been added to #${groupName}`,
+          text: isSelfJoin
+            ? `Hello ${targetUsername},\n\nYou have joined the group chat "#${groupName}" via invite link.\n\nOpen chat at: ${process.env.NEXT_PUBLIC_APP_URL || 'https://devnotes-hub.vercel.app'}/group-chat\n\nHappy collaborating!`
+            : `Hello ${targetUsername},\n\nYou have been added to the group chat "#${groupName}" by ${session.username}.\n\nJoin the conversation at: ${process.env.NEXT_PUBLIC_APP_URL || 'https://devnotes-hub.vercel.app'}/group-chat\n\nHappy collaborating!`,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 500px; border: 1px solid #eee; border-radius: 12px;">
+              <h2 style="color: #6366f1; margin-top: 0;">${isSelfJoin ? 'Joined Group Chat 💬' : 'Added to Group Chat 💬'}</h2>
+              <p>Hello <strong>${targetUsername}</strong>,</p>
+              <p>
+                ${isSelfJoin 
+                  ? `You have successfully joined the discussion channel <strong>#${groupName}</strong> via an invite link.`
+                  : `You've been added to the discussion channel <strong>#${groupName}</strong> by <strong>${session.username}</strong>.`
+                }
+              </p>
+              <p>Join the conversation and start collaborating with your team!</p>
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://devnotes-hub.vercel.app'}/group-chat" style="display:inline-block;background:#6366f1;color:white;text-decoration:none;padding:10px 20px;font-weight:bold;border-radius:8px;margin-top:10px;">Open Group Chat</a>
+              <p style="font-size:11px;color:#666;margin-top:20px;">DevNotes Hub — Your collaborative dev prep workspace.</p>
+            </div>
+          `
+        });
       }
+    } catch (emailErr) {
+      console.warn('[group-chat/members] Failed to send member notification email:', emailErr);
     }
 
     return NextResponse.json({ success: true, message: `${targetUsername} has been added to the group.` });

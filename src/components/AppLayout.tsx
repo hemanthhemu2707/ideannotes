@@ -20,7 +20,10 @@ import {
   FileText,
   MessageSquareCode,
   Moon,
-  Sun
+  Sun,
+  Briefcase,
+  MessageSquare,
+  Bell
 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import LoginModal from './LoginModal';
@@ -491,6 +494,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [notes, setNotes] = useState<any[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
 
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadGroups, setUnreadGroups] = useState<any[]>([]);
+  const [bellDropdownOpen, setBellDropdownOpen] = useState(false);
+
+  const fetchUnreads = async () => {
+    try {
+      const res = await fetch('/api/group-chat/unread');
+      const data = await res.json();
+      if (data.success) {
+        setUnreadCount(data.unreadCount);
+        setUnreadGroups(data.unreadGroups);
+      }
+    } catch (e) {
+      console.error('fetchUnreads error:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreads();
+    const interval = setInterval(fetchUnreads, 10000);
+    return () => clearInterval(interval);
+  }, [currentUser, pathname]); // poll or update on route change
+
   const checkUserSession = async () => {
     try {
       const res = await fetch('/api/auth');
@@ -607,6 +633,67 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Notification Bell (Mobile) */}
+              {currentUser && (
+                <div className="relative">
+                  <button
+                    onClick={() => setBellDropdownOpen(!bellDropdownOpen)}
+                    className="p-1.5 rounded-lg text-text-muted hover:text-accent-app transition-all cursor-pointer relative flex items-center justify-center"
+                    title="Notifications"
+                  >
+                    <Bell className="w-5 h-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white font-extrabold text-[8px] min-w-[14px] h-[14px] rounded-full flex items-center justify-center px-0.5 shadow-md animate-pulse">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {bellDropdownOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40 bg-transparent" 
+                        onClick={() => setBellDropdownOpen(false)} 
+                      />
+                      <div className="fixed top-14 right-4 z-[9999] w-72 bg-slate-900/95 backdrop-blur-md border border-border-app/50 rounded-xl shadow-2xl overflow-hidden">
+                        <div className="p-3 border-b border-border-app/40 bg-black/20 flex items-center justify-between">
+                          <span className="text-xs font-bold text-text-primary">Unread Messages</span>
+                          {unreadCount > 0 && (
+                            <span className="text-[9px] bg-red-500/20 text-red-400 font-extrabold px-1.5 py-0.5 rounded-full">
+                              {unreadCount} new
+                            </span>
+                          )}
+                        </div>
+                        <div className="max-h-60 overflow-y-auto divide-y divide-border-app/20">
+                          {unreadGroups.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-text-muted italic">
+                              No unread notifications.
+                            </div>
+                          ) : (
+                            unreadGroups.map(g => (
+                              <Link
+                                key={g.id}
+                                href={`/group-chat?select=${g.id}`}
+                                onClick={() => setBellDropdownOpen(false)}
+                                className="block p-3 hover:bg-white/5 transition-colors text-left"
+                              >
+                                <div className="flex justify-between items-center mb-1">
+                                  <span className="text-xs font-bold text-accent-app truncate pr-2">#{g.name}</span>
+                                  <span className="text-[9px] bg-accent-app/25 text-accent-app font-extrabold px-1.5 py-0.5 rounded">
+                                    {g.unreadCount}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-text-muted truncate leading-snug">{g.snippet}</p>
+                              </Link>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* Mobile Auth Button */}
               {isAdmin ? (
                 <button 
@@ -640,55 +727,80 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* 3. Mobile Bottom Navigation Bar */}
         {!isWritePage && (
-          <nav className="flex md:hidden items-center justify-around h-16 bg-surface-app/90 backdrop-blur-md border-t border-border-app/45 fixed bottom-0 left-0 right-0 z-40 px-3 shadow-2xl">
+          <nav className="flex md:hidden items-center justify-between h-16 bg-surface-app/90 backdrop-blur-md border-t border-border-app/45 fixed bottom-0 left-0 right-0 z-40 px-2.5 shadow-2xl overflow-x-auto select-none no-scrollbar">
             <Link 
               href="/"
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-all ${
+              className={`flex flex-col items-center justify-center gap-0.5 text-[8px] font-semibold transition-all shrink-0 w-11 ${
                 pathname === '/' ? 'text-accent-app' : 'text-text-muted'
               }`}
             >
-              <Home className="w-5.5 h-5.5" />
+              <Home className="w-5 h-5" />
               <span>Dashboard</span>
             </Link>
 
             <Link 
               href="/schedules"
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-all ${
+              className={`flex flex-col items-center justify-center gap-0.5 text-[8px] font-semibold transition-all shrink-0 w-11 ${
                 pathname === '/schedules' ? 'text-accent-app' : 'text-text-muted'
               }`}
             >
-              <Calendar className="w-5.5 h-5.5" />
+              <Calendar className="w-5 h-5" />
               <span>Schedules</span>
             </Link>
 
             <Link 
+              href="/interviews"
+              className={`flex flex-col items-center justify-center gap-0.5 text-[8px] font-semibold transition-all shrink-0 w-11 ${
+                pathname === '/interviews' ? 'text-accent-app' : 'text-text-muted'
+              }`}
+            >
+              <Briefcase className="w-5 h-5" />
+              <span>Interviews</span>
+            </Link>
+
+            <Link 
+              href="/group-chat"
+              className={`flex flex-col items-center justify-center gap-0.5 text-[8px] font-semibold transition-all shrink-0 w-11 relative ${
+                pathname === '/group-chat' ? 'text-accent-app' : 'text-text-muted'
+              }`}
+            >
+              <MessageSquare className="w-5 h-5" />
+              <span>Chat</span>
+              {unreadCount > 0 && (
+                <span className="absolute top-0 right-1 bg-red-500 text-white font-extrabold text-[7px] min-w-[12px] h-[12px] px-0.5 rounded-full flex items-center justify-center shadow animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
+            </Link>
+
+            <Link 
               href="/chat"
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-all ${
+              className={`flex flex-col items-center justify-center gap-0.5 text-[8px] font-semibold transition-all shrink-0 w-11 ${
                 pathname === '/chat' ? 'text-accent-app' : 'text-text-muted'
               }`}
             >
-              <MessageSquareCode className="w-5.5 h-5.5" />
+              <MessageSquareCode className="w-5 h-5" />
               <span>AI Doubt</span>
             </Link>
 
             <Link 
               href="/add"
               onClick={handleWriteClick}
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-all ${
+              className={`flex flex-col items-center justify-center gap-0.5 text-[8px] font-semibold transition-all shrink-0 w-11 ${
                 pathname === '/add' ? 'text-accent-app' : 'text-text-muted'
               }`}
             >
-              <PlusCircle className="w-5.5 h-5.5" />
+              <PlusCircle className="w-5 h-5" />
               <span>Write</span>
             </Link>
 
             <Link 
               href="/manage"
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-all ${
+              className={`flex flex-col items-center justify-center gap-0.5 text-[8px] font-semibold transition-all shrink-0 w-11 ${
                 pathname === '/manage' ? 'text-accent-app' : 'text-text-muted'
               }`}
             >
-              <Settings className="w-5.5 h-5.5" />
+              <Settings className="w-5 h-5" />
               <span>Control</span>
             </Link>
           </nav>

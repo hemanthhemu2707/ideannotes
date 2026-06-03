@@ -32,7 +32,8 @@ import {
   MessageSquareCode,
   MessageSquare,
   Moon,
-  Sun
+  Sun,
+  Bell
 } from 'lucide-react';
 import CommandPalette from './CommandPalette';
 import LoginModal from './LoginModal';
@@ -545,6 +546,29 @@ export default function Sidebar() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ username: string; role: string } | null>(null);
 
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadGroups, setUnreadGroups] = useState<any[]>([]);
+  const [bellDropdownOpen, setBellDropdownOpen] = useState(false);
+
+  const fetchUnreads = async () => {
+    try {
+      const res = await fetch('/api/group-chat/unread');
+      const data = await res.json();
+      if (data.success) {
+        setUnreadCount(data.unreadCount);
+        setUnreadGroups(data.unreadGroups);
+      }
+    } catch (e) {
+      console.error('Sidebar fetchUnreads error:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreads();
+    const interval = setInterval(fetchUnreads, 10000);
+    return () => clearInterval(interval);
+  }, [currentUser, pathname]);
+
   // Toggle collapse state
   const handleToggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
@@ -652,14 +676,77 @@ export default function Sidebar() {
         </button>
 
         {/* Branding header */}
-        <div className={`p-5 flex items-center gap-3 border-b border-border-app/60 overflow-hidden ${isCollapsed ? 'justify-center' : ''}`}>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-accent-app to-indigo-500 flex items-center justify-center shrink-0 shadow-md shadow-accent-app/20">
-            <span className="font-extrabold text-sm text-slate-50">DN</span>
+        <div className={`p-5 flex items-center justify-between border-b border-border-app/60 ${isCollapsed ? 'justify-center' : ''}`}>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-accent-app to-indigo-500 flex items-center justify-center shrink-0 shadow-md shadow-accent-app/20">
+              <span className="font-extrabold text-sm text-slate-50">DN</span>
+            </div>
+            {!isCollapsed && (
+              <div className="flex flex-col">
+                <span className="font-bold text-sm leading-tight text-text-primary tracking-wide">DevNotes Hub</span>
+                <span className="text-[10px] font-semibold text-accent-app">INTERVIEW PREP</span>
+              </div>
+            )}
           </div>
-          {!isCollapsed && (
-            <div className="flex flex-col">
-              <span className="font-bold text-sm leading-tight text-text-primary tracking-wide">DevNotes Hub</span>
-              <span className="text-[10px] font-semibold text-accent-app">INTERVIEW PREP</span>
+
+          {/* Notification Bell (Expanded Sidebar) */}
+          {!isCollapsed && currentUser && (
+            <div className="relative">
+              <button
+                onClick={() => setBellDropdownOpen(!bellDropdownOpen)}
+                className="p-1.5 rounded-lg text-text-muted hover:text-accent-app transition-all cursor-pointer relative flex items-center justify-center bg-white/5 border border-border-app/20"
+                title="Notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white font-extrabold text-[8px] min-w-[14px] h-[14px] px-0.5 rounded-full flex items-center justify-center shadow-md animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {bellDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40 bg-transparent" 
+                    onClick={() => setBellDropdownOpen(false)} 
+                  />
+                  <div className="absolute right-0 mt-2 z-50 w-72 bg-slate-900/95 backdrop-blur-md border border-border-app/50 rounded-xl shadow-2xl overflow-hidden text-left">
+                    <div className="p-3 border-b border-border-app/40 bg-black/20 flex items-center justify-between">
+                      <span className="text-xs font-bold text-text-primary">Unread Messages</span>
+                      {unreadCount > 0 && (
+                        <span className="text-[9px] bg-red-500/20 text-red-400 font-extrabold px-1.5 py-0.5 rounded-full">
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </div>
+                    <div className="max-h-60 overflow-y-auto divide-y divide-border-app/20">
+                      {unreadGroups.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-text-muted italic">
+                          No unread notifications.
+                        </div>
+                      ) : (
+                        unreadGroups.map(g => (
+                          <Link
+                            key={g.id}
+                            href={`/group-chat?select=${g.id}`}
+                            onClick={() => setBellDropdownOpen(false)}
+                            className="block p-3 hover:bg-white/5 transition-colors text-left"
+                          >
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs font-bold text-accent-app truncate pr-2">#{g.name}</span>
+                              <span className="text-[9px] bg-accent-app/25 text-accent-app font-extrabold px-1.5 py-0.5 rounded">
+                                {g.unreadCount}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-text-muted truncate leading-snug">{g.snippet}</p>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -682,6 +769,63 @@ export default function Sidebar() {
                 </kbd>
               )}
             </button>
+
+            {/* Collapsed Bell Icon */}
+            {isCollapsed && currentUser && (
+              <div className="relative">
+                <button
+                  onClick={() => setBellDropdownOpen(!bellDropdownOpen)}
+                  className="flex items-center justify-center w-full p-2.5 rounded-xl text-text-muted hover:text-accent-app transition-all border border-transparent hover:border-border-app/40 cursor-pointer relative"
+                  title="Notifications"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 bg-red-500 text-white font-extrabold text-[8px] min-w-[14px] h-[14px] px-0.5 rounded-full flex items-center justify-center shadow-md animate-pulse">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+                {bellDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setBellDropdownOpen(false)} />
+                    <div className="fixed left-[72px] top-12 z-[9999] w-72 bg-slate-900/95 backdrop-blur-md border border-border-app/50 rounded-xl shadow-2xl overflow-hidden text-left">
+                      <div className="p-3 border-b border-border-app/40 bg-black/20 flex items-center justify-between">
+                        <span className="text-xs font-bold text-text-primary">Unread Messages</span>
+                        {unreadCount > 0 && (
+                          <span className="text-[9px] bg-red-500/20 text-red-400 font-extrabold px-1.5 py-0.5 rounded-full">
+                            {unreadCount} new
+                          </span>
+                        )}
+                      </div>
+                      <div className="max-h-60 overflow-y-auto divide-y divide-border-app/20">
+                        {unreadGroups.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-text-muted italic">
+                            No unread notifications.
+                          </div>
+                        ) : (
+                          unreadGroups.map(g => (
+                            <Link
+                              key={g.id}
+                              href={`/group-chat?select=${g.id}`}
+                              onClick={() => setBellDropdownOpen(false)}
+                              className="block p-3 hover:bg-white/5 transition-colors text-left"
+                            >
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs font-bold text-accent-app truncate pr-2">#{g.name}</span>
+                                <span className="text-[9px] bg-accent-app/25 text-accent-app font-extrabold px-1.5 py-0.5 rounded">
+                                  {g.unreadCount}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-text-muted truncate leading-snug">{g.snippet}</p>
+                            </Link>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Dashboard Link */}
             <Link
@@ -732,7 +876,12 @@ export default function Sidebar() {
               }`}
             >
               <MessageSquare className={`w-5 h-5 shrink-0 ${pathname === '/group-chat' ? 'text-accent-app' : 'text-text-muted'}`} />
-              {!isCollapsed && <span className="truncate">Community Chat</span>}
+              {!isCollapsed && <span className="truncate flex-1">Community Chat</span>}
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
             </Link>
 
             {/* AI Doubt Solver Link */}

@@ -25,10 +25,14 @@ import {
   AtSign,
   Briefcase,
   ChevronRight,
-  Calendar
+  Calendar,
+  FileText,
+  HelpCircle,
+  ArrowLeft
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 interface ChatGroup {
   id: number;
@@ -67,6 +71,7 @@ export default function GroupChatPage() {
 function GroupChatInner() {
   const [groups, setGroups] = useState<ChatGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<ChatGroup | null>(null);
+  const [mobileActivePanel, setMobileActivePanel] = useState<'channels' | 'messages'>('channels');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -98,6 +103,22 @@ function GroupChatInner() {
   const [mentionDropdownOpen, setMentionDropdownOpen] = useState(false);
   const [mentionCursorPos, setMentionCursorPos] = useState(0);
   const messageInputRef = useRef<HTMLInputElement>(null);
+
+  // Autocomplete states for rich mentions (@ and #)
+  const [autocompleteTrigger, setAutocompleteTrigger] = useState<'@' | '#' | null>(null);
+  const [autocompleteQuery, setAutocompleteQuery] = useState('');
+  const [autocompleteCursorPos, setAutocompleteCursorPos] = useState(0);
+  const [autocompleteOpen, setAutocompleteOpen] = useState(false);
+
+  // Loaded mention reference data
+  const [experiences, setExperiences] = useState<any[]>([]);
+  const [notes, setNotes] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+
+  // Detailed preview drawers
+  const [selectedNoteForDrawer, setSelectedNoteForDrawer] = useState<any | null>(null);
+  const [selectedExpForDrawer, setSelectedExpForDrawer] = useState<any | null>(null);
+  const [highlightQuestionId, setHighlightQuestionId] = useState<number | null>(null);
 
   // Interview experience panel (when clicking @mention)
   const [mentionPanelUser, setMentionPanelUser] = useState<string | null>(null);
@@ -145,7 +166,10 @@ function GroupChatInner() {
         // Decide which group to select
         if (selectGroupId) {
           const toSelect = data.groups.find((g: ChatGroup) => g.id === selectGroupId);
-          if (toSelect) setSelectedGroup(toSelect);
+          if (toSelect) {
+            setSelectedGroup(toSelect);
+            setMobileActivePanel('messages');
+          }
         } else if (data.groups.length > 0 && !selectedGroup) {
           setSelectedGroup(data.groups[0]);
         }
@@ -156,7 +180,7 @@ function GroupChatInner() {
     } finally {
       setLoading(false);
     }
-  }, [selectedGroup]);
+  }, [selectedGroup, setMobileActivePanel]);
 
   // Load messages for the selected group
   const loadMessages = async (groupId: number, silent = false) => {
@@ -166,6 +190,13 @@ function GroupChatInner() {
       const data = await res.json();
       if (data.success && data.messages) {
         setMessages(data.messages);
+        
+        // Mark group as read silently
+        fetch('/api/group-chat/read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupId })
+        }).catch(err => console.error('Failed to mark read:', err));
       }
     } catch (e) {
       console.error(e);
@@ -241,10 +272,41 @@ function GroupChatInner() {
     }
   }, [searchParams]);
 
+  // Fetch references for autocomplete
+  const fetchReferenceData = useCallback(async () => {
+    try {
+      const [intRes, noteRes, catRes] = await Promise.all([
+        fetch('/api/interviews'),
+        fetch('/api/notes'),
+        fetch('/api/categories')
+      ]);
+      const [intData, noteData, catData] = await Promise.all([
+        intRes.json(),
+        noteRes.json(),
+        catRes.json()
+      ]);
+      if (intData.success) setExperiences(intData.experiences);
+      if (noteData.success) setNotes(noteData.notes);
+      if (catData.success) setCategories(catData.categories);
+    } catch (e) {
+      console.error('Failed to load reference data for mentions:', e);
+    }
+  }, []);
+
   // Init mount
   useEffect(() => {
     const init = async () => {
       const currentUser = await fetchSession();
+      await fetchReferenceData();
+
+      // Check if there is a group select request
+      const selectId = searchParams.get('select');
+      if (selectId && currentUser) {
+        await loadGroups(parseInt(selectId));
+        router.replace('/group-chat');
+        return;
+      }
+
       await loadGroups();
 
       // Check for pending invite in sessionStorage first (from a previous redirect)
@@ -272,7 +334,7 @@ function GroupChatInner() {
       }
     };
     init();
-  }, []);
+  }, [searchParams]);
 
   // Poll for messages in the active group
   useEffect(() => {
@@ -467,41 +529,186 @@ function GroupChatInner() {
     }
   };
 
-  // Handle message input changes - detect @ for mention
+  // Handle message input changes - detect @ or # for autocomplete
   const handleMessageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setNewMessageText(val);
     const cursor = e.target.selectionStart || 0;
-    setMentionCursorPos(cursor);
+    setAutocompleteCursorPos(cursor);
 
-    // Find the last '@' before cursor that isn't preceded by a word character
     const textBeforeCursor = val.slice(0, cursor);
     const atMatch = textBeforeCursor.match(/(^|[\s])@(\w*)$/);
+    const hashMatch = textBeforeCursor.match(/(^|[\s])#(\w*)$/);
+
     if (atMatch) {
-      setMentionQuery(atMatch[2]);
-      setMentionDropdownOpen(true);
+      setAutocompleteTrigger('@');
+      setAutocompleteQuery(atMatch[2]);
+      setAutocompleteOpen(true);
+    } else if (hashMatch) {
+      setAutocompleteTrigger('#');
+      setAutocompleteQuery(hashMatch[2]);
+      setAutocompleteOpen(true);
     } else {
-      setMentionDropdownOpen(false);
-      setMentionQuery('');
+      setAutocompleteTrigger(null);
+      setAutocompleteQuery('');
+      setAutocompleteOpen(false);
     }
   };
 
-  // Insert @username into message when selected from dropdown
-  const handleSelectMention = (username: string) => {
-    const textBeforeCursor = newMessageText.slice(0, mentionCursorPos);
-    const textAfterCursor = newMessageText.slice(mentionCursorPos);
-    const atMatch = textBeforeCursor.match(/(^|[\s])@(\w*)$/);
-    if (atMatch) {
-      const insertAt = textBeforeCursor.lastIndexOf('@');
-      const newText = textBeforeCursor.slice(0, insertAt) + `@${username} ` + textAfterCursor;
+  // Helper to trace nested categories hierarchy path
+  const getCategoryPath = (slug: string, cats: any[]): string => {
+    const cat = cats.find(c => c.slug === slug);
+    if (!cat) return '';
+    if (cat.parentSlug) {
+      const parentPath = getCategoryPath(cat.parentSlug, cats);
+      return parentPath ? `${parentPath} > ${cat.name}` : cat.name;
+    }
+    return cat.name;
+  };
+
+  // Filter autocomplete suggestions based on trigger and search query
+  const getAutocompleteSuggestions = () => {
+    if (autocompleteTrigger === '@') {
+      const filteredUsers = groupMembers
+        .map(m => m.username)
+        .filter(u => u.toLowerCase().includes(autocompleteQuery.toLowerCase()))
+        .map(u => ({ type: 'user', name: u }));
+
+      const filteredExps = experiences
+        .filter(exp => 
+          exp.companyName.toLowerCase().includes(autocompleteQuery.toLowerCase()) || 
+          exp.round.toLowerCase().includes(autocompleteQuery.toLowerCase()) ||
+          exp.interviewerName.toLowerCase().includes(autocompleteQuery.toLowerCase())
+        )
+        .map(exp => ({ 
+          type: 'experience', 
+          id: exp.id, 
+          companyName: exp.companyName, 
+          round: exp.round, 
+          interviewerName: exp.interviewerName 
+        }));
+
+      return [...filteredUsers, ...filteredExps];
+    } else if (autocompleteTrigger === '#') {
+      const filteredNotes = notes
+        .filter(note => {
+          const title = note.metadata?.title || note.title || '';
+          return title.toLowerCase().includes(autocompleteQuery.toLowerCase());
+        })
+        .map(note => ({
+          type: 'note',
+          title: note.metadata?.title || note.title,
+          slug: note.slug,
+          categoryFolder: note.categoryFolder || note.CategorySlug,
+          categoryPath: getCategoryPath(note.categoryFolder || note.CategorySlug, categories)
+        }));
+
+      const allQuestions: any[] = [];
+      experiences.forEach(exp => {
+        if (exp.questions) {
+          exp.questions.forEach((q: any) => {
+            allQuestions.push({
+              type: 'question',
+              id: q.id,
+              experienceId: exp.id,
+              companyName: exp.companyName,
+              questionText: q.questionText
+            });
+          });
+        }
+      });
+
+      const filteredQuestions = allQuestions
+        .filter(q => 
+          q.questionText.toLowerCase().includes(autocompleteQuery.toLowerCase()) || 
+          q.companyName.toLowerCase().includes(autocompleteQuery.toLowerCase())
+        );
+
+      return [...filteredNotes, ...filteredQuestions];
+    }
+    return [];
+  };
+
+  const autocompleteSuggestions = getAutocompleteSuggestions().slice(0, 10);
+
+  // Insert rich tags on selecting autocomplete suggestion
+  const handleSelectSuggestion = (suggestion: any) => {
+    const textBeforeCursor = newMessageText.slice(0, autocompleteCursorPos);
+    const textAfterCursor = newMessageText.slice(autocompleteCursorPos);
+    
+    let insertText = '';
+    let triggerIndex = -1;
+
+    if (autocompleteTrigger === '@') {
+      triggerIndex = textBeforeCursor.lastIndexOf('@');
+      if (suggestion.type === 'user') {
+        insertText = `@${suggestion.name} `;
+      } else if (suggestion.type === 'experience') {
+        insertText = `@Interview:[${suggestion.companyName} - ${suggestion.round}](${suggestion.id}) `;
+      }
+    } else if (autocompleteTrigger === '#') {
+      triggerIndex = textBeforeCursor.lastIndexOf('#');
+      if (suggestion.type === 'note') {
+        insertText = `#Note:[${suggestion.title}](${suggestion.categoryFolder}/${suggestion.slug}) `;
+      } else if (suggestion.type === 'question') {
+        // Limit question text snippet to keep tags reasonably sized
+        const cleanQText = suggestion.questionText.replace(/[\[\]\(\)]/g, '').substring(0, 30);
+        insertText = `#Question:[${suggestion.companyName} - ${cleanQText}...](${suggestion.experienceId}/${suggestion.id}) `;
+      }
+    }
+
+    if (triggerIndex !== -1) {
+      const newText = textBeforeCursor.slice(0, triggerIndex) + insertText + textAfterCursor;
       setNewMessageText(newText);
     }
-    setMentionDropdownOpen(false);
-    setMentionQuery('');
+
+    setAutocompleteOpen(false);
+    setAutocompleteTrigger(null);
+    setAutocompleteQuery('');
     setTimeout(() => messageInputRef.current?.focus(), 0);
   };
 
-  // Click on @mention in message — open interview experiences panel
+  // Open Preview drawers inside chatroom
+  const openInterviewDrawer = (expId: number) => {
+    const exp = experiences.find(e => e.id === expId);
+    if (exp) {
+      setSelectedExpForDrawer(exp);
+      setHighlightQuestionId(null);
+    } else {
+      toast.error('Interview experience details not found.');
+    }
+  };
+
+  const openQuestionDrawer = (expId: number, qId: number) => {
+    const exp = experiences.find(e => e.id === expId);
+    if (exp) {
+      setSelectedExpForDrawer(exp);
+      setHighlightQuestionId(qId);
+    } else {
+      toast.error('Question details not found.');
+    }
+  };
+
+  const openNoteDrawer = async (categoryFolder: string, slug: string) => {
+    try {
+      const res = await fetch(`/api/notes/detail?categoryFolder=${categoryFolder}&slug=${slug}`);
+      const data = await res.json();
+      if (data.success && data.note) {
+        setSelectedNoteForDrawer(data.note);
+      } else {
+        const found = notes.find(n => n.categoryFolder === categoryFolder && n.slug === slug);
+        if (found) {
+          setSelectedNoteForDrawer(found);
+        } else {
+          toast.error('Note details not found.');
+        }
+      }
+    } catch {
+      toast.error('Failed to load note content.');
+    }
+  };
+
+  // Click on @mention in message — open user interview experiences panel
   const handleMentionClick = async (username: string) => {
     setMentionPanelUser(username);
     setMentionPanelLoading(true);
@@ -522,22 +729,88 @@ function GroupChatInner() {
     }
   };
 
-  // Render message text with @mentions as clickable chips
+  // Render message text with rich @mentions & #references as clickable badges
   const renderMessageWithMentions = (text: string) => {
-    const parts = text.split(/(@\w+)/g);
+    if (!text) return '';
+    const tokenRegex = /(@Interview:\[[^\]]+\]\(\d+\)|#Note:\[[^\]]+\]\([^\)]+\)|#Question:\[[^\]]+\]\(\d+\/\d+\)|@\w+)/g;
+    const parts = text.split(tokenRegex);
+    
     return parts.map((part, i) => {
+      // 1. Interview Experience Mention
+      if (part.startsWith('@Interview:')) {
+        const match = part.match(/@Interview:\[([^\]]+)\]\((\d+)\)/);
+        if (match) {
+          const [_, label, expIdStr] = match;
+          const expId = parseInt(expIdStr);
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => openInterviewDrawer(expId)}
+              className="inline-flex items-center gap-0.5 px-2 py-0.5 my-0.5 rounded-md bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 font-bold text-[11px] cursor-pointer transition-colors border border-emerald-500/20 align-middle"
+            >
+              <Briefcase className="w-3 h-3 text-emerald-400 shrink-0" />
+              <span>{label}</span>
+            </button>
+          );
+        }
+      }
+      
+      // 2. Note Mention
+      if (part.startsWith('#Note:')) {
+        const match = part.match(/#Note:\[([^\]]+)\]\(([^/]+)\/([^\)]+)\)/);
+        if (match) {
+          const [_, label, categoryFolder, slug] = match;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => openNoteDrawer(categoryFolder, slug)}
+              className="inline-flex items-center gap-0.5 px-2 py-0.5 my-0.5 rounded-md bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 font-bold text-[11px] cursor-pointer transition-colors border border-indigo-500/20 align-middle"
+            >
+              <FileText className="w-3 h-3 text-indigo-400 shrink-0" />
+              <span>{label}</span>
+            </button>
+          );
+        }
+      }
+
+      // 3. Question Mention
+      if (part.startsWith('#Question:')) {
+        const match = part.match(/#Question:\[([^\]]+)\]\((\d+)\/(\d+)\)/);
+        if (match) {
+          const [_, label, expIdStr, qIdStr] = match;
+          const expId = parseInt(expIdStr);
+          const qId = parseInt(qIdStr);
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => openQuestionDrawer(expId, qId)}
+              className="inline-flex items-center gap-0.5 px-2 py-0.5 my-0.5 rounded-md bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 font-bold text-[11px] cursor-pointer transition-colors border border-amber-500/20 align-middle"
+            >
+              <HelpCircle className="w-3 h-3 text-amber-400 shrink-0" />
+              <span>{label}</span>
+            </button>
+          );
+        }
+      }
+
+      // 4. User Mention
       if (/^@\w+$/.test(part)) {
         const username = part.slice(1);
         return (
           <button
             key={i}
+            type="button"
             onClick={() => handleMentionClick(username)}
-            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/35 font-bold text-[11px] cursor-pointer transition-colors border border-indigo-500/20"
+            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 font-bold text-[11px] cursor-pointer transition-colors border border-indigo-500/20"
           >
-            <AtSign className="w-2.5 h-2.5" />{username}
+            <AtSign className="w-2.5 h-2.5 text-indigo-400" />{username}
           </button>
         );
       }
+
       return <span key={i}>{part}</span>;
     });
   };
@@ -586,7 +859,7 @@ function GroupChatInner() {
       </AnimatePresence>
 
       {/* LEFT CHANNEL SIDEBAR PANEL */}
-      <div className="w-full md:w-80 shrink-0 border-r border-border-app/45 flex flex-col h-1/3 md:h-full bg-surface-app/15 backdrop-blur-md">
+      <div className={`${mobileActivePanel === 'channels' ? 'flex' : 'hidden'} md:flex w-full md:w-80 shrink-0 border-r border-border-app/45 flex-col h-full bg-surface-app/15 backdrop-blur-md`}>
         {/* Panel Header */}
         <div className="p-4.5 border-b border-border-app/40 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
@@ -630,7 +903,10 @@ function GroupChatInner() {
             groups.map((g) => (
               <div
                 key={g.id}
-                onClick={() => setSelectedGroup(g)}
+                onClick={() => {
+                  setSelectedGroup(g);
+                  setMobileActivePanel('messages');
+                }}
                 className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center gap-3 relative overflow-hidden group ${
                   selectedGroup?.id === g.id
                     ? 'bg-accent-app/10 border-accent-app/40 shadow-sm'
@@ -662,13 +938,25 @@ function GroupChatInner() {
       </div>
 
       {/* RIGHT MESSAGES CONVERSATION PANEL */}
-      <div className="flex-1 flex flex-col h-2/3 md:h-full bg-black/10 overflow-hidden relative">
+      <div className={`${mobileActivePanel === 'messages' ? 'flex' : 'hidden'} md:flex flex-1 flex-col h-full bg-black/10 overflow-hidden relative`}>
         {selectedGroup ? (
           <div className="flex-grow flex flex-col h-full overflow-hidden">
             {/* Conversation Header */}
             <div className="p-4 px-5 border-b border-border-app/45 bg-surface-app/10 flex items-center justify-between shrink-0">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
+                  {/* Mobile Back Button */}
+                  <button
+                    onClick={() => {
+                      setMobileActivePanel('channels');
+                      setSelectedGroup(null);
+                    }}
+                    className="md:hidden p-1 mr-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors cursor-pointer"
+                    title="Back to Channels"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+
                   <Hash className="w-4 h-4 text-accent-app shrink-0" />
                   <h2 className="text-sm font-extrabold text-text-primary truncate">
                     {selectedGroup.name}
@@ -793,30 +1081,64 @@ function GroupChatInner() {
             <div className="p-4 border-t border-border-app/45 bg-surface-app/10 shrink-0">
               {user ? (
                 <div className="relative">
-                  {/* @ Mention Dropdown */}
+                  {/* Autocomplete Dropdown */}
                   <AnimatePresence>
-                    {mentionDropdownOpen && mentionSuggestions.length > 0 && (
+                    {autocompleteOpen && autocompleteSuggestions.length > 0 && (
                       <motion.div
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 6 }}
-                        className="absolute bottom-full mb-2 left-0 z-50 w-56 bg-slate-900 border border-border-app/50 rounded-xl shadow-2xl overflow-hidden"
+                        className="absolute bottom-full mb-2 left-0 z-50 w-72 bg-slate-900 border border-border-app/50 rounded-xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto"
                       >
-                        <div className="p-1.5 flex items-center gap-1.5 border-b border-border-app/30 px-3 py-2">
-                          <AtSign className="w-3 h-3 text-accent-app" />
-                          <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider">Mention a member</span>
+                        <div className="p-1.5 flex items-center gap-1.5 border-b border-border-app/30 px-3 py-2 bg-black/20">
+                          {autocompleteTrigger === '@' ? (
+                            <AtSign className="w-3.5 h-3.5 text-accent-app" />
+                          ) : (
+                            <Hash className="w-3.5 h-3.5 text-indigo-400" />
+                          )}
+                          <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider">
+                            {autocompleteTrigger === '@' ? 'Mention a member or interview' : 'Reference note or question'}
+                          </span>
                         </div>
-                        {mentionSuggestions.map(u => (
+                        {autocompleteSuggestions.map((item, idx) => (
                           <button
-                            key={u}
+                            key={idx}
                             type="button"
-                            onMouseDown={(e) => { e.preventDefault(); handleSelectMention(u); }}
-                            className="flex items-center gap-2.5 w-full px-3 py-2 hover:bg-white/5 text-left transition-colors group"
+                            onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(item); }}
+                            className="flex items-start gap-2.5 w-full px-3 py-2 hover:bg-white/5 text-left transition-colors group border-b border-border-app/10 last:border-0"
                           >
-                            <span className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold bg-surface-app border border-border-app text-indigo-400 shrink-0">
-                              {u.charAt(0).toUpperCase()}
+                            {/* Icon column */}
+                            <span className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold bg-surface-app border border-border-app text-text-muted shrink-0 group-hover:text-accent-app group-hover:border-accent-app/30 transition-all mt-0.5">
+                              {item.type === 'user' && <AtSign className="w-3 h-3 text-indigo-400" />}
+                              {item.type === 'experience' && <Briefcase className="w-3 h-3 text-emerald-400" />}
+                              {item.type === 'note' && <FileText className="w-3 h-3 text-indigo-400" />}
+                              {item.type === 'question' && <HelpCircle className="w-3 h-3 text-amber-400" />}
                             </span>
-                            <span className="text-xs font-semibold text-text-primary group-hover:text-accent-app transition-colors">{u}</span>
+                            
+                            {/* Text column */}
+                            <div className="min-w-0 flex-1">
+                              {item.type === 'user' && (
+                                <span className="text-xs font-semibold text-text-primary group-hover:text-accent-app transition-colors">{item.name}</span>
+                              )}
+                              {item.type === 'experience' && (
+                                <>
+                                  <span className="text-xs font-semibold text-text-primary group-hover:text-accent-app transition-colors block truncate">{item.companyName}</span>
+                                  <span className="text-[9px] text-text-muted block truncate font-medium">{item.round} (by {item.interviewerName})</span>
+                                </>
+                              )}
+                              {item.type === 'note' && (
+                                <>
+                                  <span className="text-xs font-semibold text-text-primary group-hover:text-accent-app transition-colors block truncate">{item.title}</span>
+                                  <span className="text-[9px] text-text-muted block truncate font-medium">{item.categoryPath || 'Notes'}</span>
+                                </>
+                              )}
+                              {item.type === 'question' && (
+                                <>
+                                  <span className="text-xs font-semibold text-text-primary group-hover:text-accent-app transition-colors block truncate leading-relaxed">{item.questionText}</span>
+                                  <span className="text-[9px] text-text-muted block truncate font-medium">{item.companyName} interview</span>
+                                </>
+                              )}
+                            </div>
                           </button>
                         ))}
                       </motion.div>
@@ -828,8 +1150,8 @@ function GroupChatInner() {
                       type="text"
                       value={newMessageText}
                       onChange={handleMessageInputChange}
-                      onBlur={() => setTimeout(() => setMentionDropdownOpen(false), 150)}
-                      placeholder={`Message #${selectedGroup.name} — type @ to mention`}
+                      onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
+                      placeholder={`Message #${selectedGroup.name} — type @ or # to mention`}
                       className="flex-1 bg-black/20 border border-border-app/45 focus:border-accent-app/60 rounded-xl px-4 py-2.5 text-xs text-text-primary placeholder-text-muted/40 focus:outline-none"
                       disabled={sending}
                     />
@@ -1248,6 +1570,152 @@ function GroupChatInner() {
                     <><Trash2 className="w-3.5 h-3.5" /><span>Delete Permanently</span></>
                   )}
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* INTERVIEW DETAIL PREVIEW DRAWER */}
+      <AnimatePresence>
+        {selectedExpForDrawer && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedExpForDrawer(null)}
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm bg-black/40"
+            />
+            <motion.div
+              initial={{ opacity: 0, x: '100%' }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative z-10 w-full max-w-lg h-full bg-slate-900 border-l border-border-app/50 shadow-2xl flex flex-col"
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-border-app/40 bg-black/20 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-accent-app" />
+                  <div>
+                    <h2 className="text-sm font-extrabold text-text-primary uppercase tracking-wide">
+                      {selectedExpForDrawer.companyName}
+                    </h2>
+                    <p className="text-[10px] text-text-muted">{selectedExpForDrawer.round} ({new Date(selectedExpForDrawer.interviewDate).toLocaleDateString()})</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedExpForDrawer(null)}
+                  className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-grow overflow-y-auto p-5 space-y-4">
+                <div className="text-[10px] text-text-muted select-none uppercase tracking-wider font-extrabold border-b border-border-app/20 pb-1 mb-2">
+                  Shared questions
+                </div>
+                {selectedExpForDrawer.questions && selectedExpForDrawer.questions.length > 0 ? (
+                  selectedExpForDrawer.questions.map((q: any) => {
+                    const isHighlighted = highlightQuestionId === q.id;
+                    return (
+                      <div
+                        key={q.id}
+                        className={`p-3.5 rounded-xl border transition-all ${
+                          isHighlighted 
+                            ? 'bg-accent-app/10 border-accent-app shadow-md ring-1 ring-accent-app/30' 
+                            : 'bg-white/3 border-border-app/30'
+                        }`}
+                      >
+                        <h4 className="text-xs font-bold text-text-primary mb-2 flex items-start gap-1.5 leading-relaxed">
+                          <span className="text-accent-app font-extrabold">Q:</span>
+                          <span>{q.questionText}</span>
+                        </h4>
+                        
+                        {/* Answers block */}
+                        {q.answers && q.answers.length > 0 ? (
+                          <div className="mt-3 pt-2.5 border-t border-border-app/20 space-y-2">
+                            <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest block">Answers</span>
+                            {q.answers.map((ans: any) => (
+                              <div key={ans.id} className="text-[11px] bg-black/30 p-2.5 rounded-lg border border-border-app/15">
+                                <div className="flex justify-between items-center mb-1 text-[9px] font-semibold text-text-muted">
+                                  <span>by {ans.username}</span>
+                                  <span>{new Date(ans.updatedDate).toLocaleDateString()}</span>
+                                </div>
+                                <p className="text-text-primary leading-relaxed whitespace-pre-wrap">{ans.answerText}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-text-muted/65 italic pl-5 mt-2">No answers posted yet.</p>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-text-muted italic">No questions listed in this experience.</p>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* NOTE DETAIL PREVIEW DRAWER */}
+      <AnimatePresence>
+        {selectedNoteForDrawer && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedNoteForDrawer(null)}
+              className="fixed inset-0 bg-slate-955/60 backdrop-blur-sm bg-black/40"
+            />
+            <motion.div
+              initial={{ opacity: 0, x: '100%' }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative z-10 w-full max-w-lg h-full bg-slate-900 border-l border-border-app/50 shadow-2xl flex flex-col"
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-border-app/40 bg-black/20 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-accent-app" />
+                  <div>
+                    <h2 className="text-sm font-extrabold text-text-primary truncate max-w-[280px]">
+                      {selectedNoteForDrawer.metadata?.title || selectedNoteForDrawer.title}
+                    </h2>
+                    <p className="text-[10px] text-text-muted">{selectedNoteForDrawer.metadata?.category || 'Category'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/read/${selectedNoteForDrawer.categoryFolder || selectedNoteForDrawer.CategorySlug}/${selectedNoteForDrawer.slug}`}
+                    className="p-1.5 rounded-lg text-accent-app bg-accent-app/10 hover:bg-accent-app/20 text-[10px] font-bold border border-accent-app/20 transition-all flex items-center gap-1 shrink-0"
+                    title="Open full page"
+                  >
+                    <span>Full page</span>
+                  </Link>
+                  <button
+                    onClick={() => setSelectedNoteForDrawer(null)}
+                    className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="flex-grow overflow-y-auto p-5 space-y-4 text-text-primary">
+                {/* Note Content */}
+                <div className="prose prose-invert prose-xs max-w-none text-xs leading-relaxed break-words whitespace-pre-wrap font-sans bg-black/20 p-4.5 rounded-xl border border-border-app/20">
+                  {selectedNoteForDrawer.content}
+                </div>
               </div>
             </motion.div>
           </div>
