@@ -441,7 +441,7 @@ function startUnreadMessagesPoller(pool: sql.ConnectionPool) {
         const { Username, GroupId, GroupName, Email } = row;
         console.log(`Sending unread chat notification email to ${Username} for group #${GroupName}...`);
         
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://devnotes-hub.vercel.app';
         const chatLink = `${appUrl}/group-chat?select=${GroupId}`;
         
         await sendEmail({
