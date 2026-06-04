@@ -33,7 +33,8 @@ import {
   MessageSquare,
   Moon,
   Sun,
-  Bell
+  Bell,
+  HelpCircle
 } from 'lucide-react';
 import CommandPalette from './CommandPalette';
 import LoginModal from './LoginModal';
@@ -802,6 +803,19 @@ export default function Sidebar({
             >
               <Briefcase className={`w-5 h-5 shrink-0 ${pathname === '/interviews' ? 'text-accent-app' : 'text-text-muted'}`} />
               {!isCollapsed && <span className="truncate">Interview Experiences</span>}
+            </Link>
+
+            {/* Important Questions Link */}
+            <Link
+              href="/important-questions"
+              className={`flex items-center gap-3 w-full p-2.5 rounded-xl transition-all text-sm font-medium border ${
+                pathname === '/important-questions' 
+                  ? 'bg-accent-app/10 border-accent-app/20 text-accent-app font-semibold' 
+                  : 'text-text-muted hover:text-text-primary hover:bg-white/5 border-transparent hover:border-border-app/40'
+              }`}
+            >
+              <HelpCircle className={`w-5 h-5 shrink-0 ${pathname === '/important-questions' ? 'text-accent-app' : 'text-text-muted'}`} />
+              {!isCollapsed && <span className="truncate">Important Questions</span>}
             </Link>
 
             {/* Real-time Group Chat Link */}

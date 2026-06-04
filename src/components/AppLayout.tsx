@@ -23,7 +23,8 @@ import {
   Sun,
   Briefcase,
   MessageSquare,
-  Bell
+  Bell,
+  HelpCircle
 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import LoginModal from './LoginModal';
@@ -613,7 +614,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const isAdmin = currentUser?.role === 'Admin';
   const isWritePage = pathname === '/add' || pathname.startsWith('/modify/') || pathname === '/login';
-  const isLayoutPage = pathname === '/chat' || pathname === '/add' || pathname.startsWith('/modify/') || pathname.startsWith('/read/');
+  const isLayoutPage = pathname === '/chat' || pathname === '/add' || pathname.startsWith('/modify/') || pathname.startsWith('/read/') || pathname === '/group-chat' || pathname === '/interviews' || pathname === '/important-questions';
   const isChatActiveOnMobile = pathname === '/group-chat' && searchParams.has('select');
   const showMobileNav = !isWritePage && !isChatActiveOnMobile;
 
@@ -786,6 +787,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             >
               <Briefcase className="w-5 h-5" />
               <span>Interviews</span>
+            </Link>
+
+            <Link 
+              href="/important-questions"
+              className={`flex flex-col items-center justify-center gap-0.5 text-[8px] font-semibold transition-all shrink-0 w-11 ${
+                pathname === '/important-questions' ? 'text-accent-app' : 'text-text-muted'
+              }`}
+            >
+              <HelpCircle className="w-5 h-5" />
+              <span>Questions</span>
             </Link>
 
             <Link 

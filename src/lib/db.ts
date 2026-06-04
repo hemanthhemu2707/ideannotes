@@ -273,6 +273,33 @@ async function initDb(pool: sql.ConnectionPool) {
           ALTER TABLE ChatGroupMembers ADD LastEmailedDate DATETIME2 NULL;
       END
 
+      -- Create ImportantQuestions Table
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ImportantQuestions')
+      BEGIN
+          CREATE TABLE ImportantQuestions (
+              Id INT IDENTITY(1,1) PRIMARY KEY,
+              CategorySlug VARCHAR(100) FOREIGN KEY REFERENCES Categories(Slug) ON DELETE CASCADE,
+              QuestionText NVARCHAR(MAX) NOT NULL,
+              CreatedBy VARCHAR(100) NOT NULL,
+              CreatedDate DATETIME2 NOT NULL DEFAULT GETDATE()
+          );
+          CREATE INDEX IX_ImportantQuestions_Category ON ImportantQuestions(CategorySlug);
+      END
+
+      -- Create ImportantAnswers Table
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ImportantAnswers')
+      BEGIN
+          CREATE TABLE ImportantAnswers (
+              Id INT IDENTITY(1,1) PRIMARY KEY,
+              QuestionId INT FOREIGN KEY REFERENCES ImportantQuestions(Id) ON DELETE CASCADE,
+              Username VARCHAR(100) NOT NULL,
+              AnswerText NVARCHAR(MAX) NOT NULL,
+              CreatedDate DATETIME2 NOT NULL DEFAULT GETDATE(),
+              UpdatedDate DATETIME2 NOT NULL DEFAULT GETDATE()
+          );
+          CREATE INDEX IX_ImportantAnswers_Question ON ImportantAnswers(QuestionId);
+      END
+
       -- Ensure default admin is approved
       UPDATE Users SET IsApproved = 1 WHERE Username = 'admin';
 
