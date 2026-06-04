@@ -133,6 +133,10 @@ function GroupChatInner() {
   const [inviteJoining, setInviteJoining] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const prevLastMessageIdRef = useRef<number | null>(null);
+  const prevGroupIdRef = useRef<number | null>(null);
+  const isFirstLoadForGroupRef = useRef<boolean>(true);
   const toast = useToast();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -351,10 +355,53 @@ function GroupChatInner() {
     return () => clearInterval(interval);
   }, [selectedGroup]);
 
+  // When group selection changes, mark it as first load for group
+  useEffect(() => {
+    if (selectedGroup) {
+      isFirstLoadForGroupRef.current = true;
+      prevGroupIdRef.current = selectedGroup.id;
+    }
+  }, [selectedGroup]);
+
   // Scroll to bottom when messages list updates
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (messages.length > 0 && selectedGroup) {
+      const lastMessage = messages[messages.length - 1];
+      const isNewMessage = prevLastMessageIdRef.current !== lastMessage.id;
+      
+      if (isNewMessage) {
+        const container = containerRef.current;
+        const isMe = user && lastMessage.username.toLowerCase() === user.username.toLowerCase();
+        
+        let shouldScroll = false;
+        if (isFirstLoadForGroupRef.current) {
+          shouldScroll = true;
+          isFirstLoadForGroupRef.current = false;
+        } else if (isMe) {
+          shouldScroll = true;
+        } else if (container) {
+          // If another user sent a message, scroll only if user is already near bottom
+          const threshold = 150; // px
+          const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+          shouldScroll = isNearBottom;
+        } else {
+          shouldScroll = true;
+        }
+
+        if (shouldScroll) {
+          setTimeout(() => {
+            if (containerRef.current) {
+              containerRef.current.scrollTop = containerRef.current.scrollHeight;
+            }
+          }, 50);
+        }
+        
+        prevLastMessageIdRef.current = lastMessage.id;
+      }
+    } else {
+      prevLastMessageIdRef.current = null;
+    }
+  }, [messages, selectedGroup, user]);
 
   // Create Chat Group Handler
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -906,6 +953,7 @@ function GroupChatInner() {
                 onClick={() => {
                   setSelectedGroup(g);
                   setMobileActivePanel('messages');
+                  router.push(`/group-chat?select=${g.id}`);
                 }}
                 className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center gap-3 relative overflow-hidden group ${
                   selectedGroup?.id === g.id
@@ -950,6 +998,7 @@ function GroupChatInner() {
                     onClick={() => {
                       setMobileActivePanel('channels');
                       setSelectedGroup(null);
+                      router.push('/group-chat');
                     }}
                     className="md:hidden p-1 mr-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors cursor-pointer"
                     title="Back to Channels"
@@ -1018,7 +1067,10 @@ function GroupChatInner() {
             </div>
 
             {/* Conversation Message Stream */}
-            <div className="flex-grow overflow-y-auto p-4 md:p-6 space-y-4 flex flex-col">
+            <div 
+              ref={containerRef}
+              className="flex-grow overflow-y-auto p-4 md:p-6 space-y-4 flex flex-col"
+            >
               {messagesLoading && messages.length === 0 ? (
                 <div className="flex-grow flex flex-col items-center justify-center text-text-muted text-xs gap-2">
                   <div className="w-6 h-6 border-2 border-accent-app border-t-transparent rounded-full animate-spin" />
@@ -1152,7 +1204,7 @@ function GroupChatInner() {
                       onChange={handleMessageInputChange}
                       onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
                       placeholder={`Message #${selectedGroup.name} — type @ or # to mention`}
-                      className="flex-1 bg-black/20 border border-border-app/45 focus:border-accent-app/60 rounded-xl px-4 py-2.5 text-xs text-text-primary placeholder-text-muted/40 focus:outline-none"
+                      className="flex-1 bg-black/20 border border-border-app/45 focus:border-accent-app/60 rounded-xl px-4 py-2.5 text-base md:text-xs text-text-primary placeholder-text-muted/40 focus:outline-none"
                       disabled={sending}
                     />
                     <button
@@ -1232,7 +1284,7 @@ function GroupChatInner() {
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
                     placeholder="e.g. dotnet-prep, react-tips"
-                    className="w-full bg-black/20 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2 px-3 text-xs font-semibold focus:outline-none"
+                    className="w-full bg-black/20 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2 px-3 text-base md:text-xs font-semibold focus:outline-none"
                   />
                 </div>
 
@@ -1245,7 +1297,7 @@ function GroupChatInner() {
                     value={newGroupDesc}
                     onChange={(e) => setNewGroupDesc(e.target.value)}
                     placeholder="e.g. Chat about .NET Core DI and memory management doubt..."
-                    className="w-full bg-black/20 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2 px-3 text-xs font-semibold focus:outline-none"
+                    className="w-full bg-black/20 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2 px-3 text-base md:text-xs font-semibold focus:outline-none"
                   />
                 </div>
 
@@ -1393,7 +1445,7 @@ function GroupChatInner() {
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
                   placeholder="Search users..."
-                  className="w-full bg-black/20 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2 px-3 text-xs font-semibold focus:outline-none"
+                  className="w-full bg-black/20 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2 px-3 text-base md:text-xs font-semibold focus:outline-none"
                 />
               </div>
 

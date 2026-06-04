@@ -154,6 +154,7 @@ function SafeMarkdownRenderer({ content }: { content: string }) {
 export default function InterviewExperiencesPage() {
   const [experiences, setExperiences] = useState<InterviewExperience[]>([]);
   const [selectedExp, setSelectedExp] = useState<InterviewExperience | null>(null);
+  const [mobileActivePanel, setMobileActivePanel] = useState<'list' | 'details'>('list');
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ username: string; role: string } | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -202,6 +203,7 @@ export default function InterviewExperiencesPage() {
         // Pre-select first experience if none is selected
         if (expData.experiences.length > 0 && !selectedExp) {
           setSelectedExp(expData.experiences[0]);
+          setMobileActivePanel('list');
         } else if (selectedExp) {
           // Refresh active experience mapping
           const updated = expData.experiences.find((e: InterviewExperience) => e.id === selectedExp.id);
@@ -364,6 +366,7 @@ export default function InterviewExperiencesPage() {
       if (data.success) {
         toast.success('Interview experience deleted.');
         setSelectedExp(null);
+        setMobileActivePanel('list');
         await loadData();
       } else {
         toast.error(data.error || 'Failed to delete experience.');
@@ -400,7 +403,7 @@ export default function InterviewExperiencesPage() {
   return (
     <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden bg-bg-app">
       {/* LEFT PANEL: Sidebar/Experiences List */}
-      <div className="w-full md:w-80 lg:w-96 shrink-0 border-r border-border-app/45 flex flex-col h-1/2 md:h-full bg-surface-app/20 backdrop-blur-md">
+      <div className={`${mobileActivePanel === 'list' ? 'flex' : 'hidden'} md:flex w-full md:w-80 lg:w-96 shrink-0 border-r border-border-app/45 flex-col h-full bg-surface-app/20 backdrop-blur-md`}>
         {/* Panel Header & Controls */}
         <div className="p-4 border-b border-border-app/40 space-y-3">
           <div className="flex items-center justify-between">
@@ -429,7 +432,7 @@ export default function InterviewExperiencesPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search company, round, questions..."
-              className="w-full bg-black/20 border border-border-app/40 focus:border-accent-app/60 rounded-xl py-2 pl-3 pr-8 text-xs focus:outline-none placeholder-text-muted/40 font-medium"
+              className="w-full bg-black/20 border border-border-app/40 focus:border-accent-app/60 rounded-xl py-2 pl-3 pr-8 text-base md:text-xs focus:outline-none placeholder-text-muted/40 font-medium"
             />
             {searchTerm && (
               <button
@@ -457,7 +460,10 @@ export default function InterviewExperiencesPage() {
             filteredExperiences.map((exp) => (
               <div
                 key={exp.id}
-                onClick={() => setSelectedExp(exp)}
+                onClick={() => {
+                  setSelectedExp(exp);
+                  setMobileActivePanel('details');
+                }}
                 className={`p-3.5 rounded-xl border transition-all cursor-pointer text-left flex flex-col gap-2 group relative overflow-hidden ${
                   selectedExp?.id === exp.id
                     ? 'bg-accent-app/10 border-accent-app/40 shadow-sm'
@@ -503,13 +509,25 @@ export default function InterviewExperiencesPage() {
       </div>
 
       {/* RIGHT PANEL: Details & Answering Section */}
-      <div className="flex-1 flex flex-col h-1/2 md:h-full bg-black/10 overflow-hidden">
+      <div className={`${mobileActivePanel === 'details' ? 'flex' : 'hidden'} md:flex flex-1 flex-col h-full bg-black/10 overflow-hidden`}>
         {selectedExp ? (
           <div className="flex-grow flex flex-col h-full overflow-hidden">
             {/* Header Details Panel */}
-            <div className="p-5 border-b border-border-app/45 bg-surface-app/10 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
+            <div className="p-4 sm:p-5 border-b border-border-app/45 bg-surface-app/10 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
+                  {/* Mobile Back Button */}
+                  <button
+                    onClick={() => {
+                      setMobileActivePanel('list');
+                      setSelectedExp(null);
+                    }}
+                    className="md:hidden p-1 mr-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors cursor-pointer"
+                    title="Back to List"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+
                   <span className="w-8 h-8 rounded-lg bg-gradient-to-tr from-accent-app/20 to-indigo-500/20 border border-accent-app/30 flex items-center justify-center font-bold text-sm text-accent-app">
                     {selectedExp.companyName.charAt(0).toUpperCase()}
                   </span>
@@ -524,24 +542,24 @@ export default function InterviewExperiencesPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 text-xs text-text-muted">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-[11px] sm:text-xs text-text-muted">
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-4 h-4 text-accent-app" />
                   <div>
-                    <span className="block text-[9px] text-text-muted/65 leading-none">Interview Date</span>
-                    <span className="font-semibold text-text-primary text-[11px]">
-                      {new Date(selectedExp.interviewDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    <span className="block text-[9px] text-text-muted/65 leading-none font-medium">Interview Date</span>
+                    <span className="font-semibold text-text-primary text-[10px] sm:text-[11px]">
+                      {new Date(selectedExp.interviewDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                     </span>
                   </div>
                 </div>
 
-                <div className="w-px h-8 bg-border-app/40" />
+                <div className="hidden sm:block w-px h-8 bg-border-app/40" />
 
                 <div className="flex items-center gap-1.5">
                   <User className="w-4 h-4 text-indigo-400" />
                   <div>
-                    <span className="block text-[9px] text-text-muted/65 leading-none">Shared By</span>
-                    <span className="font-semibold text-text-primary text-[11px]">
+                    <span className="block text-[9px] text-text-muted/65 leading-none font-medium">Shared By</span>
+                    <span className="font-semibold text-text-primary text-[10px] sm:text-[11px]">
                       {selectedExp.interviewerName}
                     </span>
                   </div>
@@ -549,14 +567,14 @@ export default function InterviewExperiencesPage() {
 
                 {(user?.role === 'Admin' || selectedExp.interviewerName.toLowerCase() === user?.username.toLowerCase()) && (
                   <>
-                    <div className="w-px h-8 bg-border-app/40" />
+                    <div className="hidden sm:block w-px h-8 bg-border-app/40" />
                     <button
                       onClick={() => handleDeleteExperience(selectedExp.id)}
-                      className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/20 hover:border-rose-500/45 text-rose-400 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                      className="p-1.5 sm:p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/20 hover:border-rose-500/45 text-rose-400 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
                       title="Delete Experience"
                     >
-                      <Trash2 className="w-4 h-4 shrink-0" />
-                      <span className="hidden sm:inline">Delete</span>
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                      <span className="text-[10px] sm:text-xs">Delete</span>
                     </button>
                   </>
                 )}
@@ -564,7 +582,7 @@ export default function InterviewExperiencesPage() {
             </div>
 
             {/* Questions list & collaborative answers */}
-            <div className="flex-grow overflow-y-auto p-5 md:p-6 space-y-6 max-w-4xl w-full mx-auto">
+            <div className="flex-grow overflow-y-auto p-3.5 sm:p-6 space-y-6 max-w-4xl w-full mx-auto">
               <h3 className="text-xs font-extrabold text-text-muted uppercase tracking-widest flex items-center gap-2 mb-4">
                 <HelpCircle className="w-4.5 h-4.5 text-accent-app" />
                 <span>Interview Questions & Collaborative Answers</span>
@@ -576,7 +594,7 @@ export default function InterviewExperiencesPage() {
                 const isEditingThis = answeringQuestionId === q.id;
 
                 return (
-                  <div key={q.id} className="glass-panel p-5 rounded-2xl border border-border-app/40 bg-surface-app/10 space-y-4">
+                  <div key={q.id} className="glass-panel p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-border-app/40 bg-surface-app/10 space-y-4">
                     {/* Question Header */}
                     <div className="flex items-start gap-3">
                       <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-accent-app/10 border border-accent-app/20 text-xs font-bold text-accent-app shrink-0 mt-0.5">
@@ -588,7 +606,7 @@ export default function InterviewExperiencesPage() {
                     </div>
 
                     {/* Answers block */}
-                    <div className="space-y-3.5 pl-9">
+                    <div className="space-y-3.5 pl-3 sm:pl-9">
                       {/* List of answers */}
                       {q.answers.length === 0 && !isEditingThis && (
                         <p className="text-xs text-text-muted/50 italic py-1">
@@ -598,8 +616,8 @@ export default function InterviewExperiencesPage() {
 
                       {/* Display other people's answers (Read-only) */}
                       {otherAnswers.map(ans => (
-                        <div key={ans.id} className="bg-black/20 rounded-xl p-4 border border-border-app/30 space-y-2">
-                          <div className="flex items-center justify-between text-[10px] text-text-muted border-b border-border-app/15 pb-2">
+                        <div key={ans.id} className="bg-black/20 rounded-xl p-3.5 sm:p-4 border border-border-app/30 space-y-2">
+                          <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1.5 xs:gap-0 text-[10px] text-text-muted border-b border-border-app/15 pb-2">
                             <span className="flex items-center gap-1 font-bold">
                               <User className="w-3 h-3 text-indigo-400" />
                               <span>{ans.username}</span>
@@ -618,8 +636,8 @@ export default function InterviewExperiencesPage() {
 
                       {/* Display my answer */}
                       {myAnswer && !isEditingThis && (
-                        <div className="bg-accent-app/5 rounded-xl p-4 border border-accent-app/20 space-y-2">
-                          <div className="flex items-center justify-between text-[10px] text-accent-app border-b border-accent-app/10 pb-2">
+                        <div className="bg-accent-app/5 rounded-xl p-3.5 sm:p-4 border border-accent-app/20 space-y-2">
+                          <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1.5 xs:gap-0 text-[10px] text-accent-app border-b border-accent-app/10 pb-2 font-semibold">
                             <span className="flex items-center gap-1 font-bold">
                               <User className="w-3 h-3" />
                               <span>Your Answer</span>
@@ -647,7 +665,7 @@ export default function InterviewExperiencesPage() {
 
                       {/* Submit/Edit answer editor field */}
                       {isEditingThis ? (
-                        <div className="bg-surface-app/30 border border-accent-app/30 rounded-xl p-4 space-y-3">
+                        <div className="bg-surface-app/30 border border-accent-app/30 rounded-xl p-3.5 sm:p-4 space-y-3">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold text-accent-app uppercase tracking-wider">
                               {myAnswer ? 'Edit Your Answer (Markdown Supported)' : 'Write Your Answer (Markdown Supported)'}
@@ -684,7 +702,7 @@ export default function InterviewExperiencesPage() {
                               onChange={(e) => setActiveAnswerText(e.target.value)}
                               placeholder="Type your detailed answer... supports Markdown (tables, code snippets, lists)"
                               rows={4}
-                              className="w-full bg-black/20 border border-border-app/40 focus:border-accent-app/60 rounded-lg p-3 text-xs leading-relaxed text-text-primary focus:outline-none font-mono resize-y"
+                              className="w-full bg-black/20 border border-border-app/40 focus:border-accent-app/60 rounded-lg p-3 text-base md:text-xs leading-relaxed text-text-primary focus:outline-none font-mono resize-y"
                             />
                           ) : (
                             <div className="prose max-w-none p-3 bg-black/25 rounded-lg border border-border-app/20 text-xs text-text-muted leading-relaxed font-normal min-h-[100px]">
@@ -779,7 +797,7 @@ export default function InterviewExperiencesPage() {
               initial={{ opacity: 0, scale: 0.96, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 15 }}
-              className="relative z-10 w-full max-w-3xl glass-panel p-6 rounded-2xl border border-border-app bg-surface-app/40 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+              className="relative z-10 w-full max-w-3xl glass-panel p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-border-app bg-surface-app/40 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
             >
               {/* Header */}
               <div className="flex items-center justify-between pb-3.5 border-b border-border-app/40 shrink-0">
@@ -828,7 +846,7 @@ export default function InterviewExperiencesPage() {
                       required
                       value={interviewDate}
                       onChange={(e) => setInterviewDate(e.target.value)}
-                      className="w-full bg-black/25 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2.5 px-3 text-xs font-semibold focus:outline-none"
+                      className="w-full bg-black/25 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2.5 px-3 text-base md:text-xs font-semibold focus:outline-none"
                     />
                   </div>
                 </div>
@@ -846,7 +864,7 @@ export default function InterviewExperiencesPage() {
                         value={companyName}
                         onChange={(e) => handleCompanyChange(e.target.value)}
                         placeholder="e.g., Microsoft, Google, Amazon..."
-                        className="w-full bg-black/25 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2.5 px-3 text-xs font-semibold focus:outline-none"
+                        className="w-full bg-black/25 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2.5 px-3 text-base md:text-xs font-semibold focus:outline-none"
                       />
                       {roundsFetchLoading && (
                         <div className="w-4.5 h-4.5 border-2 border-accent-app border-t-transparent rounded-full animate-spin absolute right-3 top-3" />
@@ -872,7 +890,7 @@ export default function InterviewExperiencesPage() {
                         setRound(e.target.value);
                       }}
                       placeholder="e.g. 1st Round, Technical Round"
-                      className="w-full bg-black/25 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2.5 px-3 text-xs font-semibold focus:outline-none"
+                      className="w-full bg-black/25 border border-border-app/40 focus:border-accent-app/60 text-text-primary rounded-xl py-2.5 px-3 text-base md:text-xs font-semibold focus:outline-none"
                     />
                   </div>
                 </div>
@@ -950,7 +968,7 @@ export default function InterviewExperiencesPage() {
                             value={q.questionText}
                             onChange={(e) => setQuestionText(e.target.value)}
                             placeholder="e.g. Write a function to check if a binary tree is balanced..."
-                            className="w-full bg-black/20 border border-border-app/35 focus:border-accent-app/50 text-text-primary rounded-lg py-2 px-3 text-xs focus:outline-none"
+                            className="w-full bg-black/20 border border-border-app/35 focus:border-accent-app/50 text-text-primary rounded-lg py-2 px-3 text-base md:text-xs focus:outline-none"
                           />
                         </div>
 
@@ -992,7 +1010,7 @@ export default function InterviewExperiencesPage() {
                               onChange={(e) => setAnswerText(e.target.value)}
                               placeholder="Provide your optional answer code or explanation..."
                               rows={3}
-                              className="w-full bg-black/20 border border-border-app/35 focus:border-accent-app/50 rounded-lg p-2.5 text-xs leading-relaxed text-text-primary focus:outline-none font-mono resize-y"
+                              className="w-full bg-black/20 border border-border-app/35 focus:border-accent-app/50 rounded-lg p-2.5 text-base md:text-xs leading-relaxed text-text-primary focus:outline-none font-mono resize-y"
                             />
                           ) : (
                             <div className="prose max-w-none p-2.5 bg-black/25 rounded-lg border border-border-app/20 text-xs text-text-muted leading-relaxed min-h-[70px]">

@@ -1,3 +1,4 @@
+import React, { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/Toast";
@@ -20,6 +21,8 @@ const jetbrainsMono = JetBrains_Mono({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export const metadata: Metadata = {
@@ -41,9 +44,15 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <ToastProvider>
-            <AppLayout>
-              {children}
-            </AppLayout>
+            <Suspense fallback={
+              <div className="flex-1 flex items-center justify-center bg-bg-app">
+                <div className="w-6.5 h-6.5 border-3 border-accent-app border-t-transparent rounded-full animate-spin" />
+              </div>
+            }>
+              <AppLayout>
+                {children}
+              </AppLayout>
+            </Suspense>
           </ToastProvider>
         </ThemeProvider>
       </body>

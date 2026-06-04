@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense, useRef } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Menu, 
@@ -485,6 +485,7 @@ function CategoryTreeItemMobile({
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { theme, setTheme, themes } = useTheme();
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -613,6 +614,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isAdmin = currentUser?.role === 'Admin';
   const isWritePage = pathname === '/add' || pathname.startsWith('/modify/') || pathname === '/login';
   const isLayoutPage = pathname === '/chat' || pathname === '/add' || pathname.startsWith('/modify/') || pathname.startsWith('/read/');
+  const isChatActiveOnMobile = pathname === '/group-chat' && searchParams.has('select');
+  const showMobileNav = !isWritePage && !isChatActiveOnMobile;
 
   return (
     <div className="flex h-screen w-screen bg-bg-app overflow-hidden">
@@ -747,13 +750,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className={`flex-1 bg-bg-app flex flex-col relative ${
           isLayoutPage ? 'overflow-hidden' : 'overflow-y-auto'
         } ${
-          !isWritePage ? 'pt-14 pb-16 md:pt-0 md:pb-0' : ''
+          !isWritePage ? (showMobileNav ? 'pt-14 pb-16 md:pt-0 md:pb-0' : 'pt-14 pb-0 md:pt-0 md:pb-0') : ''
         }`}>
           {children}
         </main>
 
         {/* 3. Mobile Bottom Navigation Bar */}
-        {!isWritePage && (
+        {showMobileNav && (
           <nav className="flex md:hidden items-center justify-between h-16 bg-surface-app/90 backdrop-blur-md border-t border-border-app/45 fixed bottom-0 left-0 right-0 z-40 px-2.5 shadow-2xl overflow-x-auto select-none no-scrollbar">
             <Link 
               href="/"
