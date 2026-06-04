@@ -64,8 +64,19 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      const notesRes = await fetch('/api/notes');
-      const notesData = await notesRes.json();
+      const [notesRes, schedRes, chkRes, expRes] = await Promise.all([
+        fetch('/api/notes'),
+        fetch('/api/schedules'),
+        fetch('/api/checklist'),
+        fetch('/api/interviews')
+      ]);
+      const [notesData, schedData, chkData, expData] = await Promise.all([
+        notesRes.json(),
+        schedRes.json(),
+        chkRes.json(),
+        expRes.json()
+      ]);
+
       if (notesData.success) {
         let fetchedNotes = notesData.notes;
         
@@ -89,19 +100,12 @@ export default function Dashboard() {
         setNotes(fetchedNotes);
       }
 
-      const schedRes = await fetch('/api/schedules');
-      const schedData = await schedRes.json();
       if (schedData.success) {
         // filter only non-completed upcoming ones
         setSchedules(schedData.schedules.filter((s: Schedule) => !s.completed));
       }
 
-      const chkRes = await fetch('/api/checklist');
-      const chkData = await chkRes.json();
       if (chkData.success) setChecklist(chkData.checklist);
-
-      const expRes = await fetch('/api/interviews');
-      const expData = await expRes.json();
       if (expData.success) setExperiences(expData.experiences);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);

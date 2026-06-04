@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -533,11 +533,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const fetchCategoriesAndCounts = async () => {
     try {
-      const catRes = await fetch('/api/categories');
-      const catData = await catRes.json();
-      
-      const notesRes = await fetch('/api/notes');
-      const notesData = await notesRes.json();
+      const [catRes, notesRes] = await Promise.all([
+        fetch('/api/categories'),
+        fetch('/api/notes')
+      ]);
+      const [catData, notesData] = await Promise.all([
+        catRes.json(),
+        notesRes.json()
+      ]);
 
       if (catData.success && catData.categories) {
         setCategories(catData.categories);
@@ -565,11 +568,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const prevPathnameRef = useRef(pathname);
+  const prevUserRef = useRef<string | null>(null);
+
   useEffect(() => {
     checkUserSession();
-    fetchCategoriesAndCounts();
+  }, []);
+
+  useEffect(() => {
+    const isMutationPath = (path: string) => path === '/add' || path === '/manage' || path.startsWith('/modify/');
+    const userChanged = currentUser?.username !== prevUserRef.current;
+
+    if (categories.length === 0 || userChanged || isMutationPath(prevPathnameRef.current)) {
+      fetchCategoriesAndCounts();
+    }
+
+    prevPathnameRef.current = pathname;
+    prevUserRef.current = currentUser ? currentUser.username : null;
     setIsDrawerOpen(false); // Close drawer on route change
-  }, [pathname]);
+  }, [pathname, currentUser]);
 
   const handleWriteClick = (e: React.MouseEvent) => {
     if (!currentUser || currentUser.role !== 'Admin') {
@@ -607,7 +624,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="w-5 h-5 border-2 border-accent-app border-t-transparent rounded-full animate-spin"></div>
           </div>
         }>
-          <Sidebar />
+          <Sidebar
+            categories={categories}
+            notes={notes}
+            categoryCounts={categoryCounts}
+            currentUser={currentUser}
+            setCurrentUser={setCurrentUser}
+            unreadCount={unreadCount}
+            unreadGroups={unreadGroups}
+            bellDropdownOpen={bellDropdownOpen}
+            setBellDropdownOpen={setBellDropdownOpen}
+          />
         </Suspense>
       )}
 

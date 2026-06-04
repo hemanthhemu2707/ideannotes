@@ -531,7 +531,29 @@ function CategoryTreeItem({
   );
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+  categories: Category[];
+  notes: any[];
+  categoryCounts: Record<string, number>;
+  currentUser: { username: string; role: string } | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<{ username: string; role: string } | null>>;
+  unreadCount: number;
+  unreadGroups: any[];
+  bellDropdownOpen: boolean;
+  setBellDropdownOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+export default function Sidebar({
+  categories,
+  notes,
+  categoryCounts,
+  currentUser,
+  setCurrentUser,
+  unreadCount,
+  unreadGroups,
+  bellDropdownOpen,
+  setBellDropdownOpen,
+}: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -539,91 +561,12 @@ export default function Sidebar() {
   const toast = useToast();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [notes, setNotes] = useState<any[]>([]);
-  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ username: string; role: string } | null>(null);
-
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [unreadGroups, setUnreadGroups] = useState<any[]>([]);
-  const [bellDropdownOpen, setBellDropdownOpen] = useState(false);
-
-  const fetchUnreads = async () => {
-    try {
-      const res = await fetch('/api/group-chat/unread');
-      const data = await res.json();
-      if (data.success) {
-        setUnreadCount(data.unreadCount);
-        setUnreadGroups(data.unreadGroups);
-      }
-    } catch (e) {
-      console.error('Sidebar fetchUnreads error:', e);
-    }
-  };
-
-  useEffect(() => {
-    fetchUnreads();
-    const interval = setInterval(fetchUnreads, 10000);
-    return () => clearInterval(interval);
-  }, [currentUser, pathname]);
 
   // Toggle collapse state
   const handleToggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
-  };
-
-  // Fetch session user
-  const checkUserSession = async () => {
-    try {
-      const res = await fetch('/api/auth');
-      const data = await res.json();
-      if (data.success && data.user) {
-        setCurrentUser(data.user);
-      } else {
-        setCurrentUser(null);
-      }
-    } catch (e) {
-      setCurrentUser(null);
-    }
-  };
-
-  // Fetch all categories and notes
-  const fetchSidebarData = async () => {
-    try {
-      const catRes = await fetch('/api/categories');
-      const catData = await catRes.json();
-      
-      const notesRes = await fetch('/api/notes');
-      const notesData = await notesRes.json();
-
-      if (catData.success && catData.categories) {
-        setCategories(catData.categories);
-        
-        // Setup initial count state
-        const counts: Record<string, number> = {};
-        catData.categories.forEach((cat: Category) => {
-          counts[cat.slug] = 0;
-        });
-
-        // Sum up active notes per category folder
-        if (notesData.success && notesData.notes) {
-          setNotes(notesData.notes);
-          notesData.notes.forEach((note: any) => {
-            const folder = note.categoryFolder;
-            if (folder in counts) {
-              counts[folder]++;
-            } else {
-              counts[folder] = 1;
-            }
-          });
-        }
-        setCategoryCounts(counts);
-      }
-    } catch (err) {
-      console.error('Error fetching sidebar category stats:', err);
-    }
   };
 
   const handleLogout = async () => {
@@ -650,11 +593,6 @@ export default function Sidebar() {
       setIsLoginOpen(true);
     }
   };
-
-  useEffect(() => {
-    checkUserSession();
-    fetchSidebarData();
-  }, [pathname, searchParams]);
 
   // Active Category helper from query
   const activeCategoryParam = searchParams.get('category') || '';
