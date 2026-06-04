@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DevNotes Hub</string>
+    <string name="title_activity_main">DevNotes Hub</string>
+    <string name="package_name">app.devnoteshub.app</string>
+    <string name="custom_url_scheme">app.devnoteshub.app</string>
+</resources>

@@ -23,7 +23,8 @@ import {
   AlertCircle,
   ChevronRight,
   Briefcase,
-  User
+  User,
+  Smartphone
 } from 'lucide-react';
 import { Note } from '@/lib/notes';
 
@@ -467,6 +468,41 @@ export default function Dashboard() {
         {/* Right Side: Timeline & Countdown Badges */}
         <div className="space-y-8">
           
+          {/* Download Mobile App QR Code Card */}
+          <motion.div variants={itemVariants} className="space-y-4">
+            <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+              <Smartphone className="w-4.5 h-4.5 text-accent-app" />
+              <span>Download Mobile App</span>
+            </h2>
+
+            <div className="glass-panel p-5 rounded-2xl border border-border-app bg-surface-app/30 flex flex-col items-center text-center gap-4">
+              <div className="bg-white p-2.5 rounded-xl border border-border-app/40 shadow-inner">
+                {/* QR code API image linking to release download */}
+                <img 
+                  src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://github.com/hemanthhemu2707/ideannotes/releases/download/app-release/app-debug.apk" 
+                  alt="Download Android App QR Code" 
+                  width={130} 
+                  height={130} 
+                  className="rounded-lg shadow-sm"
+                />
+              </div>
+              
+              <div className="space-y-1">
+                <span className="block font-extrabold text-xs text-text-primary">DevNotes Hub for Android</span>
+                <span className="block text-[10px] text-text-muted leading-relaxed">
+                  Scan this QR code with your phone to download the Android App (.APK) completely free!
+                </span>
+              </div>
+
+              <a 
+                href="https://github.com/hemanthhemu2707/ideannotes/releases/download/app-release/app-debug.apk"
+                className="w-full text-center py-2 bg-accent-app/10 border border-accent-app/20 hover:bg-accent-app text-accent-app hover:text-white font-bold rounded-xl text-[10px] transition-all cursor-pointer block"
+              >
+                Direct Download APK
+              </a>
+            </div>
+          </motion.div>
+
           {/* Upcoming Interview Schedule Card */}
           <motion.div variants={itemVariants} className="space-y-4">
             <div className="flex items-center justify-between">
